@@ -48,19 +48,19 @@ export const handleEditorSocketEvents = (socket: Socket, editorNamespace: any) =
     }
   });
 
-  socket.on("createFile", async ({ pathToFileOrFolder }: FilePayload) => {
-    try {
-      await fs.stat(pathToFileOrFolder);
-      socket.emit("error", { data: "File already exists" });
-    } catch {
-      try {
-        await fs.writeFile(pathToFileOrFolder, "");
-        socket.emit("createFileSuccess", { data: "File created successfully" });
-      } catch {
-        socket.emit("error", { data: "Error creating the file" });
-      }
-    }
-  });
+ socket.on("createFile", async ({ pathToFileOrFolder, projectId }) => {
+  try {
+    await fs.writeFile(pathToFileOrFolder, "");
+    socket.emit("createFileSuccess", { data: "File created successfully" });
+
+    // 🔁 Broadcast to other tabs
+    editorNamespace.to(projectId).emit("fileCreated", { path: pathToFileOrFolder });
+
+  } catch (error) {
+    console.error("❌ Error creating the file", error);
+    socket.emit("error", { data: "Error creating the file" });
+  }
+});
 
   socket.on("readFile", async ({ pathToFileOrFolder }: FilePayload) => {
     try {
@@ -86,14 +86,19 @@ export const handleEditorSocketEvents = (socket: Socket, editorNamespace: any) =
     }
   });
 
-  socket.on("createFolder", async ({ pathToFileOrFolder }: FilePayload) => {
-    try {
-      await fs.mkdir(pathToFileOrFolder, { recursive: true });
-      socket.emit("createFolderSuccess", { data: "Folder created successfully" });
-    } catch {
-      socket.emit("error", { data: "Error creating the folder" });
-    }
-  });
+ socket.on("createFolder", async ({ pathToFileOrFolder, projectId }) => {
+  try {
+    await fs.mkdir(pathToFileOrFolder, { recursive: true });
+    socket.emit("createFolderSuccess", { data: "Folder created successfully" });
+
+    // 🔁 Broadcast to other tabs
+    editorNamespace.to(projectId).emit("folderCreated", { path: pathToFileOrFolder });
+
+  } catch (error) {
+    console.error("❌ Error creating the folder", error);
+    socket.emit("error", { data: "Error creating the folder" });
+  }
+});
 
   // ✅ Broadcast folderDeleted
   socket.on("deleteFolder", async ({ pathToFileOrFolder, projectId }: DeletePayload) => {
