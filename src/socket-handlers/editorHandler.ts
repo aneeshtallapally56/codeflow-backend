@@ -1,6 +1,6 @@
-
 // import { getContainerPort } from "../containers/handleContainerCreate.js";
 import fs from "fs/promises";
+import path from "path"; // Add this import for path utilities
 import { Socket } from "socket.io";
 
 type FilePayload = {
@@ -15,10 +15,11 @@ type WriteFilePayload = {
 export const handleEditorSocketEvents = (socket: Socket, editorNamespace: any) => {
   socket.on("writeFile", async ({ data, pathToFileOrFolder }: WriteFilePayload) => {
     try {
-      await fs.writeFile(pathToFileOrFolder, data);
+     const content =  await fs.writeFile(pathToFileOrFolder, data);
       editorNamespace.emit("writeFileSuccess", {
         data: "File written successfully",
         path: pathToFileOrFolder,
+
       });
     } catch (error) {
       console.error("Error writing the file", error);
@@ -54,11 +55,15 @@ export const handleEditorSocketEvents = (socket: Socket, editorNamespace: any) =
   socket.on("readFile", async ({ pathToFileOrFolder }: FilePayload) => {
     try {
       const content = await fs.readFile(pathToFileOrFolder);
-      console.log(content.toString());
-      console.log(`📄 File read request received for: ${pathToFileOrFolder}`);
+      const fileExtension = path.extname(pathToFileOrFolder); 
+      
+  
+      
+
       socket.emit("readFileSuccess", {
         value: content.toString(),
         path: pathToFileOrFolder,
+        extension: fileExtension, 
       });
     } catch (error) {
       console.error("Error reading the file", error);
