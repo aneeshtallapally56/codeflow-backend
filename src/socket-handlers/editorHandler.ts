@@ -13,14 +13,28 @@ type WriteFilePayload = {
 };
 
 export const handleEditorSocketEvents = (socket: Socket, editorNamespace: any) => {
-  socket.on("writeFile", async ({ data, pathToFileOrFolder }: WriteFilePayload) => {
+   socket.on("joinFileRoom", ({ projectId, pathToFileOrFolder }) => {
+    const roomId = `${projectId}:${pathToFileOrFolder}`;
+    socket.join(roomId);
+    console.log(`User joined room ${roomId}`);
+  });
+
+  socket.on("leaveFileRoom", ({ projectId, pathToFileOrFolder }) => {
+    const roomId = `${projectId}:${pathToFileOrFolder}`;
+    socket.leave(roomId);
+    console.log(`User left room ${roomId}`);
+  });
+
+  socket.on("writeFile", async ({ data, pathToFileOrFolder, projectId }: WriteFilePayload & { projectId: string }) => {
     try {
-     const content =  await fs.writeFile(pathToFileOrFolder, data);
-      editorNamespace.emit("writeFileSuccess", {
+      await fs.writeFile(pathToFileOrFolder, data);
+
+      const roomId = `${projectId}:${pathToFileOrFolder}`;
+      editorNamespace.to(roomId).emit("writeFileSuccess", {
         data: "File written successfully",
         path: pathToFileOrFolder,
-
       });
+
     } catch (error) {
       console.error("Error writing the file", error);
       socket.emit("error", {
@@ -28,7 +42,7 @@ export const handleEditorSocketEvents = (socket: Socket, editorNamespace: any) =
       });
     }
   });
-
+  
   socket.on("createFile", async ({ pathToFileOrFolder }: FilePayload) => {
      const isFileAlreadyPresent = await fs.stat(pathToFileOrFolder);
         if(isFileAlreadyPresent) {
