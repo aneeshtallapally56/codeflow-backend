@@ -8,8 +8,8 @@ import {
 
 const router = Router();
 
-router.post("/files", auth, createFile);
-router.get("/files/:projectId", auth, getFilesByProject);
-router.put("/files/:fileId", auth, updateFileContent);
+router.post("/", auth, createFile);
+router.get("/", auth, getFilesByProject);
+router.put("/", auth, updateFileContent);
 
 export default router;

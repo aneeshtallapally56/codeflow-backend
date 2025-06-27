@@ -11,7 +11,7 @@ import { handleEditorSocketEvents } from './socket-handlers/editorHandler';
 import { connect } from 'node:http2';
 import { connectDB } from './config/db-config';
 import './types/socket';
-
+import cookieParser from 'cookie-parser';
 
 const app = express();
 const server = createServer(app);
@@ -22,9 +22,13 @@ const io = new Server(server,{
     }
 });
 
+app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(cors());
+app.use(cors({
+     origin: "http://localhost:3000",
+    credentials: true,  
+}));
 
 
 

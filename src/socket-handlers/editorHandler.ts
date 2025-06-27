@@ -30,10 +30,21 @@ export const handleEditorSocketEvents = (socket: Socket, editorNamespace: any) =
 
   socket.on("joinProjectRoom", ({ projectId }) => {
     socket.join(projectId);
+   editorNamespace.to(projectId).emit("userJoined", {
+    userId: socket.userId,
+     socketId: socket.id,
+  });
+
+  console.log(`👥 User ${socket.userId} joined project room ${projectId}`);
   });
 
   socket.on("leaveProjectRoom", ({ projectId }) => {
     socket.leave(projectId);
+     editorNamespace.to(projectId).emit("userLeft", {
+    userId: socket.userId,
+     socketId: socket.id,
+  });
+  console.log(`👥 User ${socket.userId} left project room ${projectId}`);
   });
 
   socket.on("writeFile", async ({ data, pathToFileOrFolder, projectId }: WriteFilePayload & { projectId: string }) => {
