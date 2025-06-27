@@ -30,10 +30,6 @@ const userSchema = new Schema<IUserDocument>({
     minlength: [6, 'Password must be at least 6 characters'],
     select: false // Don't include password in queries by default
   },
-  avatarUrl: {
-    type: String,
-    default: null
-  },
   projectsCreated: {
     type: Number,
     default: 0

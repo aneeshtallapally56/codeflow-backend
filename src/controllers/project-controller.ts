@@ -26,6 +26,7 @@ export async function createProject(
       _id: projectId,
       title,
       user: userId,
+      collaborators:[userId] // Add the user as a collaborator
     });
 
     res.status(200).json({
@@ -56,3 +57,25 @@ export async function getProjectTree(
     res.status(500).json({ error: err.message });
   }
 }
+export const getUserProjects = async (req: Request, res: Response) => {
+  try {
+    const user = req.user as { _id: mongoose.Types.ObjectId };
+    const userId = user._id.toString();
+
+    
+    if (!user?._id) {
+       res.status(401).json({ message: "Unauthorized" });
+       return;
+    }
+
+     const projects = await Project.find({ user: user._id })
+      .sort({ createdAt: -1 })
+      .populate('user', 'username ') 
+      .populate('collaborators', 'username '); 
+
+    res.status(200).json({ projects });
+  } catch (err) {
+    console.error("❌ Error fetching projects:", err);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};

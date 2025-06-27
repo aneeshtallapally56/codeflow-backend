@@ -8,18 +8,19 @@ import apiRoutes from './routes';
 import cors from 'cors';
 import path from 'node:path';
 import { handleEditorSocketEvents } from './socket-handlers/editorHandler';
-import { connect } from 'node:http2';
+import * as cookie from 'cookie';
 import { connectDB } from './config/db-config';
 import './types/socket';
 import cookieParser from 'cookie-parser';
 
 const app = express();
 const server = createServer(app);
-const io = new Server(server,{
-    cors:{
-        origin:'*',
-        methods: ['GET', 'POST'],
-    }
+const io = new Server(server, {
+  cors: {
+    origin: "http://localhost:3000", // ✅ Match exactly with frontend
+    credentials: true,               // ✅ Required for cookie auth
+    methods: ["GET", "POST"],
+  }
 });
 
 app.use(cookieParser());
@@ -41,16 +42,18 @@ io.on('connection', (socket) => {
 
 const editorNamespace = io.of('/editor');
 editorNamespace.use((socket, next) => {
-  const token = socket.handshake.auth?.token;
+  const rawCookie = socket.handshake.headers.cookie;
+  const parsed = cookie.parse(rawCookie || "");
+  const token = parsed.token; 
 
   if (!token) {
-    console.error("❌ No token provided");
+    console.error("❌ No token provided in cookies");
     return next(new Error("Authentication error"));
   }
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET!) as JwtPayload;
-    socket.userId = decoded.userId; 
+    socket.userId = decoded.userId;
     next();
   } catch (err) {
     console.error("❌ Invalid token:", err);

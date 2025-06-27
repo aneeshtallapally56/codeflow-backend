@@ -6,7 +6,8 @@ import { Request, Response, NextFunction } from "express";
 
 const auth = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const token = req.header("Authorization")?.replace("Bearer ", "");
+    const token = req.cookies.token; 
+
     if (!token) {
        res.status(401).json({
         success: false,
@@ -23,9 +24,8 @@ const auth = async (req: Request, res: Response, next: NextFunction) => {
       });
       return;
     }
-    const user = await User.findById((decoded as JwtPayload).userId).select(
-      "-password"
-    );
+
+    const user = await User.findById((decoded as JwtPayload).userId).select("-password");
 
     if (!user) {
        res.status(401).json({
@@ -34,15 +34,18 @@ const auth = async (req: Request, res: Response, next: NextFunction) => {
       });
       return;
     }
-     // @ts-ignore (optional: or extend Request with a custom type)
+
+    // @ts-ignore or use a custom type extension
     req.user = user;
     next();
   } catch (error) {
-     console.error('Auth middleware error:', error);
-    res.status(401).json({ 
+    console.error("Auth middleware error:", error);
+    res.status(401).json({
       success: false,
-      message: 'Token is not valid' 
+      message: "Token is not valid",
     });
+     return;
   }
-  }
+};
+
 export default auth;
