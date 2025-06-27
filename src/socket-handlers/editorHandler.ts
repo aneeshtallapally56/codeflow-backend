@@ -1,6 +1,7 @@
 import fs from "fs/promises";
 import path from "path";
 import { Socket } from "socket.io";
+import File from '../models/File'
 
 type FilePayload = {
   pathToFileOrFolder: string;
@@ -52,6 +53,13 @@ export const handleEditorSocketEvents = (socket: Socket, editorNamespace: any) =
   try {
     await fs.writeFile(pathToFileOrFolder, "");
     socket.emit("createFileSuccess", { data: "File created successfully" });
+    //push to db
+      await File.create({
+      name,
+      path: pathToFileOrFolder,
+      project: projectId,
+      lastEditedBy: socket.userId, 
+    });
 
     // 🔁 Broadcast to other tabs
     editorNamespace.to(projectId).emit("fileCreated", { path: pathToFileOrFolder });

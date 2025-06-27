@@ -5,7 +5,10 @@
     "rootDir": "./src",
     "outDir": "./dist",
     "strict": true,
-    "esModuleInterop": true
+    "esModuleInterop": true,
+
+
+
   },
   "include": ["src/**/*"],
   "exclude": ["generated-projects", "node_modules", "dist"]

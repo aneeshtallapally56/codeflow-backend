@@ -1,10 +1,14 @@
 import express from 'express';
 import { ping } from '../../controllers';
 import projectRoutes from './project-routes'; // Add this import
+import { test } from '../../controllers/db-controller';
+import authRoutes from './auth-routes'; // Import auth routes
 
 const router = express.Router();
 
 router.use('/ping', ping);
-router.use('/projects', projectRoutes); // Use the imported router
+router.use('/projects', projectRoutes);
+router.use('/test',test) // Use the imported router
+router.use('/auth',authRoutes)
 
 export default router;

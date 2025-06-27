@@ -5,6 +5,8 @@ import directoryTree from "directory-tree";
 import { execPromise } from "../utils/exec-utility";
 
 export const createProjectService = async () => {
+  
+
   const command = process.env.REACT_PROJECT_COMMAND!;
   const projectId = uuid4();
   console.log("New project ID:", projectId);
