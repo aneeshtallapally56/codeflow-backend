@@ -26,3 +26,12 @@ export const getProjectTree = async (projectId: string) => {
     return projectTree;
 
 }
+export const deleteProjectService  = async (projectId: string) => {
+  const projectPath = path.join(process.cwd(), "generated-projects", projectId);
+
+   if (!(await fs.stat(projectPath).catch(() => false))) {
+  console.warn("Project folder not found:", projectPath);
+  return;
+   }
+   await fs.rm(projectPath, { recursive: true, force: true });
+}
