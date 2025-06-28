@@ -12,6 +12,7 @@ import * as cookie from 'cookie';
 import { connectDB } from './config/db-config';
 import './types/socket';
 import cookieParser from 'cookie-parser';
+import { setupEditorNamespace } from './socket-handlers/editorNamespace';
 
 const app = express();
 const server = createServer(app);
@@ -36,69 +37,10 @@ app.use(cors({
 connectDB();
 
 io.on('connection', (socket) => {
-
  console.log("✅ Backend received a socket connection");
 });
 
-const editorNamespace = io.of('/editor');
-editorNamespace.use((socket, next) => {
-  const rawCookie = socket.handshake.headers.cookie;
-  const parsed = cookie.parse(rawCookie || "");
-  const token = parsed.token; 
-
-  if (!token) {
-    console.error("❌ No token provided in cookies");
-    return next(new Error("Authentication error"));
-  }
-
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as JwtPayload;
-    socket.userId = decoded.userId;
-    next();
-  } catch (err) {
-    console.error("❌ Invalid token:", err);
-    return next(new Error("Authentication failed"));
-  }
-});
-
-
-editorNamespace.on('connection', (socket) => {
-    console.log('editor namespace connected');
-    
-// get projectId from frontend
-
-const queryParams = socket.handshake.query;
-const projectId = queryParams.projectId as string;
-
-console.log('Project ID from backend query params:', projectId);
-if(projectId){
-     const projectPath = path.join(process.cwd(), "generated-projects", projectId);
-    var watcher = chokidar.watch(projectPath,{
-        ignored: (path) => (
-            path.includes('node_modules') 
-        ),
-        persistent: true,
-        ignoreInitial: true,
-        awaitWriteFinish: {
-            stabilityThreshold: 2000,
-            pollInterval: 100
-        }
-    });
-    watcher.on('all', (event, path) => {
-        console.log(`File ${path} has been ${event}`);
-       
-    });
-}
-
-
-handleEditorSocketEvents(socket, editorNamespace);
-socket.on('disconnect', async () => {
-    await watcher.close();
-    console.log('editor namespace disconnected');
-
-});
-});
-
+setupEditorNamespace(io);
 
 
 app.use('/api', apiRoutes);

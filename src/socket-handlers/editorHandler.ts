@@ -34,7 +34,6 @@ export const handleEditorSocketEvents = (socket: Socket, editorNamespace: any) =
     userId: socket.userId,
      socketId: socket.id,
   });
-
   console.log(`👥 User ${socket.userId} joined project room ${projectId}`);
   });
 
@@ -66,15 +65,12 @@ export const handleEditorSocketEvents = (socket: Socket, editorNamespace: any) =
     socket.emit("createFileSuccess", { data: "File created successfully" });
     //push to db
       await File.create({
-      name,
+      name:path.basename(pathToFileOrFolder),
       path: pathToFileOrFolder,
-      project: projectId,
+      projectId: projectId,
       lastEditedBy: socket.userId, 
     });
-
-    // 🔁 Broadcast to other tabs
     editorNamespace.to(projectId).emit("fileCreated", { path: pathToFileOrFolder });
-
   } catch (error) {
     console.error("❌ Error creating the file", error);
     socket.emit("error", { data: "Error creating the file" });
