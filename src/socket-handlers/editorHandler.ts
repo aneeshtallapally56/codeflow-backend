@@ -1,7 +1,8 @@
 import fs from "fs/promises";
 import path from "path";
 import { Socket } from "socket.io";
-import File from '../models/File'
+import File from "../models/File";
+import User from "../models/User";
 
 type FilePayload = {
   pathToFileOrFolder: string;
@@ -18,6 +19,7 @@ type DeletePayload = {
 };
 
 export const handleEditorSocketEvents = (socket: Socket, editorNamespace: any) => {
+  // 💡 File room join/leave (for per-file sync)
   socket.on("joinFileRoom", ({ projectId, pathToFileOrFolder }) => {
     const roomId = `${projectId}:${pathToFileOrFolder}`;
     socket.join(roomId);
@@ -28,24 +30,52 @@ export const handleEditorSocketEvents = (socket: Socket, editorNamespace: any) =
     socket.leave(roomId);
   });
 
-  socket.on("joinProjectRoom", ({ projectId }) => {
+  // 🧑‍🤝‍🧑 Project room join
+  socket.on("joinProjectRoom", async ({ projectId }) => {
     socket.join(projectId);
-   editorNamespace.to(projectId).emit("userJoined", {
-    userId: socket.userId,
-     socketId: socket.id,
-  });
-  console.log(`👥 User ${socket.userId} joined project room ${projectId}`);
+
+    try {
+      const user = await User.findById(socket.userId).select("username");
+
+      // 👥 Inform others that a user joined
+      editorNamespace.to(projectId).emit("userJoined", {
+        userId: socket.userId,
+        username: user?.username || "Unknown",
+        socketId: socket.id,
+      });
+
+      // 📦 Send initial users to the joining user
+      const clientsInRoom = Array.from(editorNamespace.adapter.rooms.get(projectId) || []);
+      const userMap = await Promise.all(
+        clientsInRoom.map(async (socketId) => {
+          const s = editorNamespace.sockets.get(socketId);
+          const u = await User.findById((s as any).userId).select("username");
+          return {
+            userId: (s as any).userId,
+            username: u?.username || "Unknown",
+            socketId,
+          };
+        })
+      );
+      socket.emit("initialUsers", userMap);
+
+      console.log(`👥 User ${user?.username} (${socket.userId}) joined project room ${projectId}`);
+    } catch (error) {
+      console.error("Error in joinProjectRoom:", error);
+    }
   });
 
+  // 🚪 Project room leave
   socket.on("leaveProjectRoom", ({ projectId }) => {
     socket.leave(projectId);
-     editorNamespace.to(projectId).emit("userLeft", {
-    userId: socket.userId,
-     socketId: socket.id,
-  });
-  console.log(`👥 User ${socket.userId} left project room ${projectId}`);
+    editorNamespace.to(projectId).emit("userLeft", {
+      userId: socket.userId,
+      socketId: socket.id,
+    });
+    console.log(`👥 User ${socket.userId} left project room ${projectId}`);
   });
 
+  // 📝 Write file
   socket.on("writeFile", async ({ data, pathToFileOrFolder, projectId }: WriteFilePayload & { projectId: string }) => {
     try {
       await fs.writeFile(pathToFileOrFolder, data);
@@ -59,24 +89,27 @@ export const handleEditorSocketEvents = (socket: Socket, editorNamespace: any) =
     }
   });
 
- socket.on("createFile", async ({ pathToFileOrFolder, projectId }) => {
-  try {
-    await fs.writeFile(pathToFileOrFolder, "");
-    socket.emit("createFileSuccess", { data: "File created successfully" });
-    //push to db
-      await File.create({
-      name:path.basename(pathToFileOrFolder),
-      path: pathToFileOrFolder,
-      projectId: projectId,
-      lastEditedBy: socket.userId, 
-    });
-    editorNamespace.to(projectId).emit("fileCreated", { path: pathToFileOrFolder });
-  } catch (error) {
-    console.error("❌ Error creating the file", error);
-    socket.emit("error", { data: "Error creating the file" });
-  }
-});
+  // 📄 Create file
+  socket.on("createFile", async ({ pathToFileOrFolder, projectId }) => {
+    try {
+      await fs.writeFile(pathToFileOrFolder, "");
+      socket.emit("createFileSuccess", { data: "File created successfully" });
 
+      await File.create({
+        name: path.basename(pathToFileOrFolder),
+        path: pathToFileOrFolder,
+        projectId,
+        lastEditedBy: socket.userId,
+      });
+
+      editorNamespace.to(projectId).emit("fileCreated", { path: pathToFileOrFolder });
+    } catch (error) {
+      console.error("❌ Error creating the file", error);
+      socket.emit("error", { data: "Error creating the file" });
+    }
+  });
+
+  // 📖 Read file
   socket.on("readFile", async ({ pathToFileOrFolder }: FilePayload) => {
     try {
       const content = await fs.readFile(pathToFileOrFolder);
@@ -91,6 +124,7 @@ export const handleEditorSocketEvents = (socket: Socket, editorNamespace: any) =
     }
   });
 
+  // 🗑️ Delete file
   socket.on("deleteFile", async ({ pathToFileOrFolder, projectId }: DeletePayload) => {
     try {
       await fs.unlink(pathToFileOrFolder);
@@ -101,21 +135,20 @@ export const handleEditorSocketEvents = (socket: Socket, editorNamespace: any) =
     }
   });
 
- socket.on("createFolder", async ({ pathToFileOrFolder, projectId }) => {
-  try {
-    await fs.mkdir(pathToFileOrFolder, { recursive: true });
-    socket.emit("createFolderSuccess", { data: "Folder created successfully" });
+  // 📁 Create folder
+  socket.on("createFolder", async ({ pathToFileOrFolder, projectId }) => {
+    try {
+      await fs.mkdir(pathToFileOrFolder, { recursive: true });
+      socket.emit("createFolderSuccess", { data: "Folder created successfully" });
 
-    // 🔁 Broadcast to other tabs
-    editorNamespace.to(projectId).emit("folderCreated", { path: pathToFileOrFolder });
+      editorNamespace.to(projectId).emit("folderCreated", { path: pathToFileOrFolder });
+    } catch (error) {
+      console.error("❌ Error creating the folder", error);
+      socket.emit("error", { data: "Error creating the folder" });
+    }
+  });
 
-  } catch (error) {
-    console.error("❌ Error creating the folder", error);
-    socket.emit("error", { data: "Error creating the folder" });
-  }
-});
-
-  // ✅ Broadcast folderDeleted
+  // 🗑️ Delete folder
   socket.on("deleteFolder", async ({ pathToFileOrFolder, projectId }: DeletePayload) => {
     try {
       await fs.rm(pathToFileOrFolder, { recursive: true, force: true });

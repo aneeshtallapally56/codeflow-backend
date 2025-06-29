@@ -35,3 +35,4 @@ export const deleteProjectService  = async (projectId: string) => {
    }
    await fs.rm(projectPath, { recursive: true, force: true });
 }
+

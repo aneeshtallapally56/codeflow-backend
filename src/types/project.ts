@@ -5,7 +5,8 @@ export interface IProject {
 
   title: string;
   user: Types.ObjectId;
-  collaborators?: Types.ObjectId[];
+  members?: Types.ObjectId[];
   createdAt?: Date;
   updatedAt?: Date;
+  type: "React" | "Nextjs" | "Angular" | "Vue"; 
 }

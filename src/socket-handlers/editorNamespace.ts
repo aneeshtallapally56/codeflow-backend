@@ -7,13 +7,11 @@ import * as cookie from "cookie";
 import { handleEditorSocketEvents } from "./editorHandler";
 
 const watchers = new Map<string, FSWatcher>();
-const projectUsers = new Map<string, Set<string>>(); 
-
 
 export function setupEditorNamespace(io: Server) {
   const editorNamespace = io.of("/editor");
 
-  // Middleware to verify JWT and attach userId
+  // 🔐 Middleware: Attach userId from JWT
   editorNamespace.use((socket, next) => {
     const rawCookie = socket.handshake.headers.cookie;
     const parsed = cookie.parse(rawCookie || "");
@@ -25,7 +23,7 @@ export function setupEditorNamespace(io: Server) {
 
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
-      (socket as any).userId = decoded.userId; // Attach to socket
+      (socket as any).userId = decoded.userId;
       next();
     } catch (err) {
       console.error("Token error", err);
@@ -33,34 +31,16 @@ export function setupEditorNamespace(io: Server) {
     }
   });
 
-  // Connection handler
+  // ⚡ On connection
   editorNamespace.on("connection", (socket: Socket) => {
     const queryParams = socket.handshake.query;
     const projectId = queryParams.projectId as string;
     const userId = (socket as any).userId;
 
-    // ✅ Join socket room for project
+    // ✅ Join project room
     socket.join(projectId);
 
-    // ✅ Track live users
-    if (!projectUsers.has(projectId)) {
-      projectUsers.set(projectId, new Set());
-    }
-    projectUsers.get(projectId)!.add(userId);
-
-    const clientsInRoom = Array.from(
-      editorNamespace.adapter.rooms.get(projectId) || []
-    );
-    const currentUsers = clientsInRoom.map((socketId) => {
-      const s = editorNamespace.sockets.get(socketId);
-      return {
-        userId: (s as any).userId,
-        socketId,
-      };
-    });
-    socket.emit("initialUsers", currentUsers);
-
-    // File Watcher Setup (optional)
+    // 📁 Optional: Set up file system watcher
     if (projectId) {
       const projectPath = path.join(
         process.cwd(),
@@ -84,10 +64,10 @@ export function setupEditorNamespace(io: Server) {
       watchers.set(socket.id, watcher);
     }
 
-    // File-related event handlers
+    // 📦 Register editor event handlers
     handleEditorSocketEvents(socket, editorNamespace);
 
-    // 🔌 Disconnect cleanup
+    // 🔌 Cleanup on disconnect
     socket.on("disconnect", async () => {
       console.log(`🔌 Disconnected: ${socket.id}`);
 
@@ -95,15 +75,6 @@ export function setupEditorNamespace(io: Server) {
       const watcher = watchers.get(socket.id);
       if (watcher) await watcher.close();
       watchers.delete(socket.id);
-
-      // Remove from project users
-      const users = projectUsers.get(projectId);
-      if (users) {
-        users.delete(userId);
-        if (users.size === 0) {
-          projectUsers.delete(projectId);
-        }
-      }
 
       // Notify others
       editorNamespace.to(projectId).emit("userLeft", {

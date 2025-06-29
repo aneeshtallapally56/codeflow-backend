@@ -1,18 +1,23 @@
-import mongoose, { Schema, Document , Types } from "mongoose";
+import mongoose, { Schema, Document, Types } from "mongoose";
 import { IProject } from "../types/project";
-
-
 
 const ProjectSchema: Schema = new Schema<IProject>(
   {
     _id: { type: String, required: true }, // Use uuid string
     title: { type: String, required: true },
     user: { type: Schema.Types.ObjectId, ref: "User", required: true },
-    collaborators: [{ type: Schema.Types.ObjectId, ref: "User" }],
+    members: [{ type: Schema.Types.ObjectId, ref: "User" }],
+    
+    // Add enum field here
+    type: {
+      type: String,
+      enum: ["React", "Nextjs", "Angular", "Vue"],
+      required: true,
+    },
   },
   {
     timestamps: true,
-    _id: false, // allows setting _id manually
+    _id: false,
   }
 );
 
