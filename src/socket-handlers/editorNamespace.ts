@@ -5,6 +5,8 @@ import jwt from "jsonwebtoken";
 import { Socket, Server } from "socket.io";
 import * as cookie from "cookie";
 import { handleEditorSocketEvents } from "./editorHandler";
+import User from "../models/User";
+import redis from "../utils/redis"; // ✅ make sure path is correct
 
 const watchers = new Map<string, FSWatcher>();
 
@@ -32,51 +34,60 @@ export function setupEditorNamespace(io: Server) {
   });
 
   // ⚡ On connection
-  editorNamespace.on("connection", (socket: Socket) => {
+  editorNamespace.on("connection", async (socket: Socket) => {
     const queryParams = socket.handshake.query;
     const projectId = queryParams.projectId as string;
     const userId = (socket as any).userId;
 
+    if (!projectId || !userId) {
+      socket.disconnect();
+      return;
+    }
+
     // ✅ Join project room
     socket.join(projectId);
 
-    // 📁 Optional: Set up file system watcher
-    if (projectId) {
-      const projectPath = path.join(
-        process.cwd(),
-        "generated-projects",
-        projectId
-      );
-      const watcher = chokidar.watch(projectPath, {
-        ignored: (filePath) => filePath.includes("node_modules"),
-        persistent: true,
-        ignoreInitial: true,
-        awaitWriteFinish: {
-          stabilityThreshold: 2000,
-          pollInterval: 100,
-        },
-      });
+    // ✅ Register in Redis
+    await redis.sadd(`online-users:${projectId}`, userId);
 
-      watcher.on("all", (event, filePath) => {
-        console.log(`📁 File ${filePath} ${event}`);
-      });
+    // ✅ Fetch current users from Redis
+    const liveUserIds = await redis.smembers(`online-users:${projectId}`);
+    socket.emit("initialUsers", liveUserIds);
 
-      watchers.set(socket.id, watcher);
-    }
-
-    // 📦 Register editor event handlers
+    // 📦 Editor-related event handlers
     handleEditorSocketEvents(socket, editorNamespace);
 
-    // 🔌 Cleanup on disconnect
+    // 📁 Optional: Set up project file watcher
+    const projectPath = path.join(process.cwd(), "generated-projects", projectId);
+    const watcher = chokidar.watch(projectPath, {
+      ignored: (filePath) => filePath.includes("node_modules"),
+      persistent: true,
+      ignoreInitial: true,
+      awaitWriteFinish: {
+        stabilityThreshold: 2000,
+        pollInterval: 100,
+      },
+    });
+
+    watcher.on("all", (event, filePath) => {
+      console.log(`📁 File ${filePath} ${event}`);
+    });
+
+    watchers.set(socket.id, watcher);
+
+    // 🔌 Handle disconnect
     socket.on("disconnect", async () => {
       console.log(`🔌 Disconnected: ${socket.id}`);
 
-      // Stop watcher
+  
+
+      // 🧹 Cleanup watcher
       const watcher = watchers.get(socket.id);
       if (watcher) await watcher.close();
       watchers.delete(socket.id);
-
-      // Notify others
+          // 🧹 Remove from Redis
+      await redis.srem(`online-users:${projectId}`, userId);
+      // 🔄 Notify others
       editorNamespace.to(projectId).emit("userLeft", {
         userId,
         socketId: socket.id,

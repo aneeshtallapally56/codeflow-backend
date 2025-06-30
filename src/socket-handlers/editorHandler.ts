@@ -3,6 +3,7 @@ import path from "path";
 import { Socket } from "socket.io";
 import File from "../models/File";
 import User from "../models/User";
+import redis from "../utils/redis"; // Redis instance
 
 type FilePayload = {
   pathToFileOrFolder: string;
@@ -19,17 +20,6 @@ type DeletePayload = {
 };
 
 export const handleEditorSocketEvents = (socket: Socket, editorNamespace: any) => {
-  // 💡 File room join/leave (for per-file sync)
-  socket.on("joinFileRoom", ({ projectId, pathToFileOrFolder }) => {
-    const roomId = `${projectId}:${pathToFileOrFolder}`;
-    socket.join(roomId);
-  });
-
-  socket.on("leaveFileRoom", ({ projectId, pathToFileOrFolder }) => {
-    const roomId = `${projectId}:${pathToFileOrFolder}`;
-    socket.leave(roomId);
-  });
-
   // 🧑‍🤝‍🧑 Project room join
   socket.on("joinProjectRoom", async ({ projectId }) => {
     socket.join(projectId);
@@ -37,37 +27,52 @@ export const handleEditorSocketEvents = (socket: Socket, editorNamespace: any) =
     try {
       const user = await User.findById(socket.userId).select("username");
 
-      // 👥 Inform others that a user joined
+      // ➕ Add user to Redis set
+      if (!socket.userId) {
+  console.error("Missing userId on socket");
+  return;
+}
+
+      await redis.sadd(`online-users:${projectId}`, socket.userId);
+
+      // 🔁 Broadcast join
       editorNamespace.to(projectId).emit("userJoined", {
         userId: socket.userId,
         username: user?.username || "Unknown",
         socketId: socket.id,
       });
 
-      // 📦 Send initial users to the joining user
-      const clientsInRoom = Array.from(editorNamespace.adapter.rooms.get(projectId) || []);
+      // 📦 Send initial users to newly joined socket
+      const userIds = await redis.smembers(`online-users:${projectId}`);
       const userMap = await Promise.all(
-        clientsInRoom.map(async (socketId) => {
-          const s = editorNamespace.sockets.get(socketId);
-          const u = await User.findById((s as any).userId).select("username");
+        userIds.map(async (id) => {
+          const u = await User.findById(id).select("username");
           return {
-            userId: (s as any).userId,
+            userId: id,
             username: u?.username || "Unknown",
-            socketId,
           };
         })
       );
       socket.emit("initialUsers", userMap);
 
-      console.log(`👥 User ${user?.username} (${socket.userId}) joined project room ${projectId}`);
-    } catch (error) {
-      console.error("Error in joinProjectRoom:", error);
+      console.log(`👥 User ${user?.username} (${socket.userId}) joined project ${projectId}`);
+    } catch (err) {
+      console.error("Error in joinProjectRoom", err);
     }
   });
 
   // 🚪 Project room leave
-  socket.on("leaveProjectRoom", ({ projectId }) => {
+  socket.on("leaveProjectRoom", async ({ projectId }) => {
     socket.leave(projectId);
+
+    // ➖ Remove user from Redis
+    if (!socket.userId) {
+  console.error("Missing userId on socket");
+  return;
+}
+
+await redis.sadd(`online-users:${projectId}`, socket.userId);
+
     editorNamespace.to(projectId).emit("userLeft", {
       userId: socket.userId,
       socketId: socket.id,
@@ -75,12 +80,20 @@ export const handleEditorSocketEvents = (socket: Socket, editorNamespace: any) =
     console.log(`👥 User ${socket.userId} left project room ${projectId}`);
   });
 
+  // 💡 File room join/leave
+  socket.on("joinFileRoom", ({ projectId, pathToFileOrFolder }) => {
+    socket.join(`${projectId}:${pathToFileOrFolder}`);
+  });
+
+  socket.on("leaveFileRoom", ({ projectId, pathToFileOrFolder }) => {
+    socket.leave(`${projectId}:${pathToFileOrFolder}`);
+  });
+
   // 📝 Write file
   socket.on("writeFile", async ({ data, pathToFileOrFolder, projectId }: WriteFilePayload & { projectId: string }) => {
     try {
       await fs.writeFile(pathToFileOrFolder, data);
-      const roomId = `${projectId}:${pathToFileOrFolder}`;
-      editorNamespace.to(roomId).emit("writeFileSuccess", {
+      editorNamespace.to(`${projectId}:${pathToFileOrFolder}`).emit("writeFileSuccess", {
         data: "File written successfully",
         path: pathToFileOrFolder,
       });
@@ -93,8 +106,6 @@ export const handleEditorSocketEvents = (socket: Socket, editorNamespace: any) =
   socket.on("createFile", async ({ pathToFileOrFolder, projectId }) => {
     try {
       await fs.writeFile(pathToFileOrFolder, "");
-      socket.emit("createFileSuccess", { data: "File created successfully" });
-
       await File.create({
         name: path.basename(pathToFileOrFolder),
         path: pathToFileOrFolder,
@@ -102,6 +113,7 @@ export const handleEditorSocketEvents = (socket: Socket, editorNamespace: any) =
         lastEditedBy: socket.userId,
       });
 
+      socket.emit("createFileSuccess", { data: "File created successfully" });
       editorNamespace.to(projectId).emit("fileCreated", { path: pathToFileOrFolder });
     } catch (error) {
       console.error("❌ Error creating the file", error);
@@ -113,11 +125,10 @@ export const handleEditorSocketEvents = (socket: Socket, editorNamespace: any) =
   socket.on("readFile", async ({ pathToFileOrFolder }: FilePayload) => {
     try {
       const content = await fs.readFile(pathToFileOrFolder);
-      const fileExtension = path.extname(pathToFileOrFolder);
       socket.emit("readFileSuccess", {
         value: content.toString(),
         path: pathToFileOrFolder,
-        extension: fileExtension,
+        extension: path.extname(pathToFileOrFolder),
       });
     } catch {
       socket.emit("error", { data: "Error reading the file" });
@@ -140,7 +151,6 @@ export const handleEditorSocketEvents = (socket: Socket, editorNamespace: any) =
     try {
       await fs.mkdir(pathToFileOrFolder, { recursive: true });
       socket.emit("createFolderSuccess", { data: "Folder created successfully" });
-
       editorNamespace.to(projectId).emit("folderCreated", { path: pathToFileOrFolder });
     } catch (error) {
       console.error("❌ Error creating the folder", error);
