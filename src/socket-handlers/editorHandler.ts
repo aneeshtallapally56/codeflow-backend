@@ -146,6 +146,58 @@ export const handleEditorSocketEvents = (socket: Socket, editorNamespace: any) =
     }
   });
 
+  socket.on("transferFileLock", async ({ projectId, filePath, newUserId }) => {
+    try {
+      const key = getLockKey(projectId, filePath);
+      const currenUserId = socket.userId;
+      const lockData = await redis.get(key);
+         if (!lockData) return;
+         const lock = JSON.parse(lockData);
+      if (lock.userId === !currenUserId) {
+         return socket.emit("fileLockDenied", {
+        filePath,
+        username: lock.username,
+        reason: "You don't hold the lock",
+      });
+      }
+      //have to check if new user exists in the socket 
+    const socketsInRoom = await editorNamespace.in(filePath).fetchSockets();
+    const targetSocket: Socket & { userId?: string; username?: string } | undefined = socketsInRoom.find((s: Socket & { userId?: string }) => s.userId === newUserId);
+
+    if (!targetSocket) {
+      return socket.emit("fileLockDenied", {
+        filePath,
+        username: "Unknown",
+        reason: "Target user is not connected",
+      });
+    }
+       const targetUsername = targetSocket.username;
+       const newLock = JSON.stringify({
+      userId: newUserId,
+      username: targetUsername,
+    });
+ await redis.set(key, newLock, "EX", 60 * 5); 
+editorNamespace.to(`${projectId}:${filePath}`).emit("unlockFile", { projectId, filePath });
+targetSocket.emit("fileLockGranted",{
+      filePath,
+      userId: newUserId,
+      username: targetUsername,
+    });
+ socket.emit("fileLockedByOther", {
+      filePath,
+      userId: newUserId,
+      username: targetUsername,
+    });
+
+    } catch (error) {
+     console.error("Error in transferFileLock:", error);
+    socket.emit("fileLockDenied", {
+      filePath,
+      username: "unknown",
+      reason: "Internal error",
+    });
+    }
+  });
   socket.on("writeFile", async ({ data, filePath, projectId }: WriteFilePayload & { projectId: string }) => {
     try {
       await fs.writeFile(filePath, data);
