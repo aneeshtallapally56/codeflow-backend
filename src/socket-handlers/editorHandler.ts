@@ -5,12 +5,17 @@ import File from "../models/File";
 import User from "../models/User";
 import redis from "../utils/redis"; // Redis instance
 
+// Redis-based file lock key format: file-lock:projectId:filePath
+const getLockKey = (projectId: string, filePath: string) => `file-lock:${projectId}:${filePath}`;
+
+// Types
+
 type FilePayload = {
-  pathToFileOrFolder: string;
+  filePath: string;
 };
 
 type WriteFilePayload = {
-  pathToFileOrFolder: string;
+  filePath: string;
   data: string;
 };
 
@@ -26,23 +31,19 @@ export const handleEditorSocketEvents = (socket: Socket, editorNamespace: any) =
 
     try {
       const user = await User.findById(socket.userId).select("username");
-
-      // ➕ Add user to Redis set
       if (!socket.userId) {
-  console.error("Missing userId on socket");
-  return;
-}
+        console.error("Missing userId on socket");
+        return;
+      }
 
       await redis.sadd(`online-users:${projectId}`, socket.userId);
 
-      // 🔁 Broadcast join
       editorNamespace.to(projectId).emit("userJoined", {
         userId: socket.userId,
         username: user?.username || "Unknown",
         socketId: socket.id,
       });
 
-      // 📦 Send initial users to newly joined socket
       const userIds = await redis.smembers(`online-users:${projectId}`);
       const userMap = await Promise.all(
         userIds.map(async (id) => {
@@ -65,13 +66,12 @@ export const handleEditorSocketEvents = (socket: Socket, editorNamespace: any) =
   socket.on("leaveProjectRoom", async ({ projectId }) => {
     socket.leave(projectId);
 
-    // ➖ Remove user from Redis
     if (!socket.userId) {
-  console.error("Missing userId on socket");
-  return;
-}
+      console.error("Missing userId on socket");
+      return;
+    }
 
-await redis.sadd(`online-users:${projectId}`, socket.userId);
+    await redis.srem(`online-users:${projectId}`, socket.userId);
 
     editorNamespace.to(projectId).emit("userLeft", {
       userId: socket.userId,
@@ -89,13 +89,94 @@ await redis.sadd(`online-users:${projectId}`, socket.userId);
     socket.leave(`${projectId}:${pathToFileOrFolder}`);
   });
 
+  // 🔒 Lock file
+ socket.on("lockFile", async ({ projectId, filePath, requestId }) => {
+  try {
+    const key = getLockKey(projectId, filePath);
+    const lockExists = await redis.get(key);
+    const user = await User.findById(socket.userId).select("username");
+
+    if (lockExists) {
+      const existingLock = JSON.parse(lockExists);
+      
+      // Check if already locked by same user
+      if (existingLock.userId === socket.userId) {
+        socket.emit("fileLockGranted", {
+          userId: socket.userId,
+          username: user?.username || "Unknown",
+          filePath,
+          requestId
+        });
+      } else {
+        socket.emit("fileLockDenied", {
+          userId: existingLock.userId,
+          username: existingLock.username,
+          filePath,
+          requestId
+        });
+      }
+    } else {
+      // Grant lock
+      const locker = {
+        userId: socket.userId,
+        username: user?.username || "Unknown",
+      };
+      
+      await redis.set(key, JSON.stringify(locker), "EX", 300); // 5 min expiry
+      
+      // Emit to all users in file room
+      editorNamespace.to(`${projectId}:${filePath}`).emit("fileLocked", {
+        ...locker,
+        filePath,
+      });
+      
+      // Confirm to requester
+      socket.emit("fileLockGranted", {
+        ...locker,
+        filePath,
+        requestId
+      });
+    }
+  } catch (error) {
+    console.error("Lock error:", error);
+    socket.emit("lockError", {
+      error: "Failed to acquire lock",
+      requestId,
+      filePath
+    });
+  }
+});
+
+  // 🔓 Unlock file
+ socket.on("unlockFile", async ({ projectId, filePath }) => {
+  try {
+    const key = getLockKey(projectId, filePath);
+    const lockData = await redis.get(key);
+    
+    if (lockData) {
+      const lock = JSON.parse(lockData);
+      // Only allow unlocking by the lock owner
+      if (lock.userId === socket.userId) {
+        await redis.del(key);
+        editorNamespace.to(`${projectId}:${filePath}`).emit("fileUnlocked", { filePath });
+        socket.emit("fileLockReleased", { filePath });
+      }
+    }
+  } catch (error) {
+    socket.emit("lockError", { 
+      error: "Failed to release lock", 
+      filePath 
+    });
+  }
+});
+
   // 📝 Write file
-  socket.on("writeFile", async ({ data, pathToFileOrFolder, projectId }: WriteFilePayload & { projectId: string }) => {
+  socket.on("writeFile", async ({ data, filePath, projectId }: WriteFilePayload & { projectId: string }) => {
     try {
-      await fs.writeFile(pathToFileOrFolder, data);
-      editorNamespace.to(`${projectId}:${pathToFileOrFolder}`).emit("writeFileSuccess", {
+      await fs.writeFile(filePath, data);
+      editorNamespace.to(`${projectId}:${filePath}`).emit("writeFileSuccess", {
         data: "File written successfully",
-        path: pathToFileOrFolder,
+        filePath: filePath,
       });
     } catch {
       socket.emit("error", { data: "Error writing the file" });
@@ -122,17 +203,19 @@ await redis.sadd(`online-users:${projectId}`, socket.userId);
   });
 
   // 📖 Read file
-  socket.on("readFile", async ({ pathToFileOrFolder }: FilePayload) => {
-    try {
-      const content = await fs.readFile(pathToFileOrFolder);
-      socket.emit("readFileSuccess", {
-        value: content.toString(),
-        path: pathToFileOrFolder,
-        extension: path.extname(pathToFileOrFolder),
-      });
-    } catch {
-      socket.emit("error", { data: "Error reading the file" });
-    }
+  socket.on("readFile", async ({filePath }: FilePayload) => {
+   try {
+    console.log("📖 Attempting to read file:", filePath);
+    const content = await fs.readFile(filePath);
+    socket.emit("readFileSuccess", {
+      value: content.toString(),
+      filePath: filePath,
+      extension: path.extname(filePath),
+    });
+  } catch (err) {
+    console.error("❌ Failed to read file:", filePath, err);
+    socket.emit("error", { data: "Error reading the file" });
+  }
   });
 
   // 🗑️ Delete file
@@ -166,6 +249,22 @@ await redis.sadd(`online-users:${projectId}`, socket.userId);
       socket.emit("deleteFolderSuccess", { data: "Folder deleted successfully" });
     } catch {
       socket.emit("error", { data: "Error deleting the folder" });
+    }
+  });
+
+  // On disconnect: unlock any files the user locked
+  socket.on("disconnect", async () => {
+    const keys = await redis.keys("file-lock:*");
+    for (const key of keys) {
+      const value = await redis.get(key);
+      if (!value) continue;
+      const { userId } = JSON.parse(value);
+      if (userId === socket.userId) {
+        await redis.del(key);
+        const [_, projectId, ...filePathParts] = key.split(":");
+        const filePath = filePathParts.join(":");
+        editorNamespace.to(`${projectId}:${filePath}`).emit("fileUnlocked", { filePath });
+      }
     }
   });
 };
