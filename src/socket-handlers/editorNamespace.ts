@@ -48,10 +48,10 @@ export function setupEditorNamespace(io: Server) {
     socket.join(projectId);
 
     // ✅ Register in Redis
-    await redis.sadd(`online-users:${projectId}`, userId);
+    await redis.sadd(`project-users:${projectId}`, userId);
 
     // ✅ Fetch current users from Redis
-    const liveUserIds = await redis.smembers(`online-users:${projectId}`);
+    const liveUserIds = await redis.smembers(`project-users:${projectId}`);
     socket.emit("initialUsers", liveUserIds);
 
     // 📦 Editor-related event handlers
@@ -79,19 +79,31 @@ export function setupEditorNamespace(io: Server) {
     socket.on("disconnect", async () => {
       console.log(`🔌 Disconnected: ${socket.id}`);
 
-  
-
       // 🧹 Cleanup watcher
       const watcher = watchers.get(socket.id);
       if (watcher) await watcher.close();
       watchers.delete(socket.id);
-          // 🧹 Remove from Redis
-      await redis.srem(`online-users:${projectId}`, userId);
+
+      // 🧹 Remove from Redis
+      await redis.srem(`project-users:${projectId}`, userId);
+
       // 🔄 Notify others
       editorNamespace.to(projectId).emit("userLeft", {
         userId,
         socketId: socket.id,
       });
+
+      // 🔄 Remove from all file rooms this user joined
+      const keys = await redis.keys(`project-users:${projectId}:*`);
+      for (const key of keys) {
+        await redis.srem(key, userId);
+        const filePath = key.replace(`project-users:${projectId}:`, "");
+        editorNamespace.to(`${projectId}:${filePath}`).emit("fileUserLeft", {
+          userId,
+          filePath,
+          socketId: socket.id,
+        });
+      }
     });
   });
 }
