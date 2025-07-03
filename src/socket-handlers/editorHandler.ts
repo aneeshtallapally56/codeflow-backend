@@ -4,8 +4,9 @@ import { Socket } from "socket.io";
 import File from "../models/File";
 import User from "../models/User";
 import redis from "../utils/redis";
+import { getFileLock } from "../utils/lockManager";
 
-const getLockKey = (projectId: string, filePath: string) => `file-lock:${projectId}:${filePath}`;
+
 const getFilePresenceKey = (projectId: string, filePath: string) => `file-users:${projectId}:${filePath}`;
 
 type FilePayload = { filePath: string };
@@ -13,6 +14,7 @@ type WriteFilePayload = { filePath: string; data: string };
 type DeletePayload = { filePath: string; projectId: string };
 
 export const handleEditorSocketEvents = (socket: Socket, editorNamespace: any) => {
+   const userId = (socket as any).userId;
   socket.on("joinProjectRoom", async ({ projectId }) => {
     socket.join(projectId);
     try {
@@ -56,149 +58,82 @@ export const handleEditorSocketEvents = (socket: Socket, editorNamespace: any) =
     });
   });
 
-  socket.on("joinFileRoom", async ({ projectId, filePath }) => {
-    socket.join(`${projectId}:${filePath}`);
-    try {
-      if (!socket.userId) return;
-      console.log(`User ${socket.userId} joined file room: ${projectId}:${filePath}`);
-      const user = await User.findById(socket.userId).select("username");
-      await redis.sadd(getFilePresenceKey(projectId, filePath), socket.userId);
+ // JOIN FILE ROOM
+socket.on("joinFileRoom", async ({ projectId, filePath }) => {
+  socket.join(`${projectId}:${filePath}`);
+  try {
+    if (!socket.userId) return;
 
-      editorNamespace.to(`${projectId}:${filePath}`).emit("userJoinedFile", {
-        userId: socket.userId,
-        username: user?.username || "Unknown",
-        socketId: socket.id,
+    // ✅ Get lock holder (await it)
+    const lockHolder = await getFileLock(filePath);
+
+    // ✅ Add user to file presence set
+    await redis.sadd(getFilePresenceKey(projectId, filePath), socket.userId);
+
+    // ✅ Get current user's name
+    const user = await User.findById(socket.userId).select("username");
+
+    // ✅ Broadcast user joined to file room
+    editorNamespace.to(`${projectId}:${filePath}`).emit("userJoinedFile", {
+      userId: socket.userId,
+      username: user?.username || "Unknown",
+      socketId: socket.id,
+    });
+
+    // ✅ Send initial file users list to the new user
+    const fileUserIds = await redis.smembers(getFilePresenceKey(projectId, filePath));
+    const users = [];
+
+    for (const id of fileUserIds) {
+      const u = await User.findById(id).select("username");
+      const sock = Array.from(editorNamespace.sockets.values()).find(
+        (s) => (s as Socket).userId === id
+      ) as Socket | undefined;
+
+      users.push({
+        userId: id,
+        username: u?.username || "Unknown",
+        socketId: sock?.id || "",
       });
-
-      const fileUserIds = await redis.smembers(getFilePresenceKey(projectId, filePath));
-      const users = [];
-
-      for (const id of fileUserIds) {
-        const u = await User.findById(id).select("username");
-        const sock = Array.from(editorNamespace.sockets.values()).find(s => (s as Socket).userId === id) as Socket | undefined;
-        users.push({
-          userId: id,
-          username: u?.username || "Unknown",
-          socketId: sock?.id || "",
-        });
-      }
-
-      socket.emit("initialFileUsers", users);
-
- 
-    } catch (error) {
-      console.error("Error in joinFileRoom", error);
     }
-  });
+
+    socket.emit("initialFileUsers", users);
+
+    // ✅ Send current lock holder to the new user
+    if (lockHolder) {
+      socket.emit("fileLocked", { filePath, userId: lockHolder });
+    }
+
+  } catch (error) {
+    console.error("Error in joinFileRoom", error);
+  }
+});
 
   socket.on("leaveFileRoom", async ({ projectId, filePath }) => {
-    socket.leave(`${projectId}:${filePath}`);
-    console.log(`User ${socket.userId} left file room: ${projectId}:${filePath}`);
-    const userId = socket.userId;
-    if (!userId) return;
+  socket.leave(`${projectId}:${filePath}`);
+  console.log(`User ${socket.userId} left file room: ${projectId}:${filePath}`);
+  const userId = socket.userId;
+  if (!userId) return;
 
-    await redis.srem(getFilePresenceKey(projectId, filePath), userId);
+  // ✅ Remove from file presence set
+  await redis.srem(getFilePresenceKey(projectId, filePath), userId);
 
-    editorNamespace.to(`${projectId}:${filePath}`).emit("userLeftFile", {
-      userId: socket.userId,
-    });
+  // ✅ Broadcast that user left the file
+  editorNamespace.to(`${projectId}:${filePath}`).emit("userLeftFile", {
+    userId,
   });
 
-  socket.on("lockFile", async ({ projectId, filePath, requestId }) => {
-    try {
-      const key = getLockKey(projectId, filePath);
-      const lockExists = await redis.get(key);
-      const user = await User.findById(socket.userId).select("username");
-
-      if (lockExists) {
-        const existingLock = JSON.parse(lockExists);
-        if (existingLock.userId === socket.userId) {
-          socket.emit("fileLockGranted", { userId: socket.userId, username: user?.username || "Unknown", filePath, requestId });
-          editorNamespace.to(`${projectId}:${filePath}`).emit("fileLocked", { userId: socket.userId, username: user?.username || "Unknown", filePath });
-        } else {
-          socket.emit("fileLockDenied", { userId: existingLock.userId, username: existingLock.username, filePath, requestId });
-          socket.emit("fileLockedByOther", { userId: existingLock.userId, username: existingLock.username, filePath });
-        }
-      } else {
-        const locker = { userId: socket.userId, username: user?.username || "Unknown" };
-        await redis.set(key, JSON.stringify(locker), "EX", 300);
-        editorNamespace.to(`${projectId}:${filePath}`).emit("fileLocked", { ...locker, filePath });
-        socket.emit("fileLockGranted", { ...locker, filePath, requestId });
-      }
-    } catch (error) {
-      socket.emit("lockError", { error: "Failed to acquire lock", requestId, filePath });
-    }
-  });
-
-  socket.on("unlockFile", async ({ projectId, filePath }) => {
-    try {
-      const key = getLockKey(projectId, filePath);
-      const lockData = await redis.get(key);
-      if (lockData) {
-        const lock = JSON.parse(lockData);
-        if (lock.userId === socket.userId) {
-          await redis.del(key);
-          editorNamespace.to(`${projectId}:${filePath}`).emit("fileUnlocked", { filePath });
-          socket.emit("fileLockReleased", { filePath });
-        }
-      }
-    } catch (error) {
-      socket.emit("lockError", { error: "Failed to release lock", filePath });
-    }
-  });
-
-  socket.on("transferFileLock", async ({ projectId, filePath, newUserId }) => {
-    try {
-      const key = getLockKey(projectId, filePath);
-      const currenUserId = socket.userId;
-      const lockData = await redis.get(key);
-         if (!lockData) return;
-         const lock = JSON.parse(lockData);
-      if (lock.userId === !currenUserId) {
-         return socket.emit("fileLockDenied", {
-        filePath,
-        username: lock.username,
-        reason: "You don't hold the lock",
-      });
-      }
-      //have to check if new user exists in the socket 
-    const socketsInRoom = await editorNamespace.in(filePath).fetchSockets();
-    const targetSocket: Socket & { userId?: string; username?: string } | undefined = socketsInRoom.find((s: Socket & { userId?: string }) => s.userId === newUserId);
-
-    if (!targetSocket) {
-      return socket.emit("fileLockDenied", {
-        filePath,
-        username: "Unknown",
-        reason: "Target user is not connected",
-      });
-    }
-       const targetUsername = targetSocket.username;
-       const newLock = JSON.stringify({
-      userId: newUserId,
-      username: targetUsername,
-    });
- await redis.set(key, newLock, "EX", 60 * 5); 
-editorNamespace.to(`${projectId}:${filePath}`).emit("unlockFile", { projectId, filePath });
-targetSocket.emit("fileLockGranted",{
+  // ✅ Check if this user holds the lock
+  const currentLockHolder = await getFileLock(filePath);
+  if (currentLockHolder === userId) {
+    await redis.del(`file-lock:${filePath}`);
+    editorNamespace.to(`${projectId}:${filePath}`).emit("fileUnlocked", {
       filePath,
-      userId: newUserId,
-      username: targetUsername,
     });
- socket.emit("fileLockedByOther", {
-      filePath,
-      userId: newUserId,
-      username: targetUsername,
-    });
+  }
+});
 
-    } catch (error) {
-     console.error("Error in transferFileLock:", error);
-    socket.emit("fileLockDenied", {
-      filePath,
-      username: "unknown",
-      reason: "Internal error",
-    });
-    }
-  });
+
   socket.on("writeFile", async ({ data, filePath, projectId }: WriteFilePayload & { projectId: string }) => {
     try {
       await fs.writeFile(filePath, data);
@@ -243,8 +178,9 @@ targetSocket.emit("fileLockGranted",{
       await fs.mkdir(filePath, { recursive: true });
       socket.emit("createFolderSuccess", { data: "Folder created successfully" });
       editorNamespace.to(projectId).emit("folderCreated", { path: filePath });
-    } catch {
-      socket.emit("error", { data: "Error creating the folder" });
+    } catch(error) {
+      const errorMessage = (error instanceof Error) ? error.message : String(error);
+      socket.emit("error", { data: "Error creating the folder", error: errorMessage });
     }
   });
 
@@ -257,6 +193,64 @@ targetSocket.emit("fileLockGranted",{
       socket.emit("error", { data: "Error deleting the folder" });
     }
   });
+
+  socket.on("lockFile", async ({ projectId, filePath, userId }) => {
+  const key = `file-lock:${filePath}`;
+  const success = await (redis as any).set(key, JSON.stringify({ userId }), "NX", "EX", 300);
+
+  if (success) {
+    editorNamespace.to(`${projectId}:${filePath}`).emit("fileLocked", {
+      filePath,
+      userId,
+    });
+  } else {
+    // optionally emit current lock holder
+    const current = await redis.get(key);
+    if (current) {
+      const { userId: currentHolder } = JSON.parse(current);
+      socket.emit("fileLocked", { filePath, userId: currentHolder });
+    }
+  }
+});
+ socket.on("transferLock", async ({ filePath, projectId, toUserId }) => {
+    const lockKey = `file-lock:${filePath}`;
+     const rawValue = await redis.get(lockKey);
+
+  if (!rawValue) {
+    return socket.emit("error", { message: "No lock found to transfer" });
+  }
+let currentHolder;
+ try {
+    currentHolder = JSON.parse(rawValue);
+  } catch (err) {
+    console.error("Failed to parse lock value from Redis:", rawValue);
+    return socket.emit("error", { message: "Lock data corrupted" });
+  }
+    console.log(`Transfer request - Current holder: ${currentHolder}, Socket user: ${userId}`);
+    
+    if (currentHolder.userId !== userId) {
+      console.log(currentHolder, userId);
+      return socket.emit("error", { message: "You don't hold the lock" });
+    }
+
+    await redis.set(lockKey,JSON.stringify({ userId: toUserId }), "EX", 300); // renew lock for 5 minutes
+    editorNamespace.to(`${projectId}:${filePath}`).emit("fileLocked", {
+      filePath,
+      userId: toUserId,
+    });
+    
+    console.log(`Lock transferred from ${userId} to ${toUserId} for file ${filePath}`);
+  });
+socket.on("requestLock", ({ filePath, projectId }) => {
+  const fileRoom = `${projectId}:${filePath}`;
+  // Broadcast request to the current lock holder
+  editorNamespace.to(fileRoom).emit("fileLockRequested", {
+    filePath,
+    projectId,
+    requestedBy: socket.userId,
+    requesterSocketId: socket.id,
+  });
+});
 
   socket.on("disconnect", async () => {
     const keys = await redis.keys("file-lock:*");
