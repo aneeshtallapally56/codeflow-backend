@@ -60,11 +60,11 @@ export const handleEditorSocketEvents = (socket: Socket, editorNamespace: any) =
     socket.join(`${projectId}:${filePath}`);
     try {
       if (!socket.userId) return;
-
+      console.log(`User ${socket.userId} joined file room: ${projectId}:${filePath}`);
       const user = await User.findById(socket.userId).select("username");
       await redis.sadd(getFilePresenceKey(projectId, filePath), socket.userId);
 
-      editorNamespace.to(`${projectId}:${filePath}`).emit("UserJoinedFile", {
+      editorNamespace.to(`${projectId}:${filePath}`).emit("userJoinedFile", {
         userId: socket.userId,
         username: user?.username || "Unknown",
         socketId: socket.id,
@@ -93,12 +93,13 @@ export const handleEditorSocketEvents = (socket: Socket, editorNamespace: any) =
 
   socket.on("leaveFileRoom", async ({ projectId, filePath }) => {
     socket.leave(`${projectId}:${filePath}`);
+    console.log(`User ${socket.userId} left file room: ${projectId}:${filePath}`);
     const userId = socket.userId;
     if (!userId) return;
 
     await redis.srem(getFilePresenceKey(projectId, filePath), userId);
 
-    editorNamespace.to(`${projectId}:${filePath}`).emit("fileUserLeft", {
+    editorNamespace.to(`${projectId}:${filePath}`).emit("userLeftFile", {
       userId: socket.userId,
     });
   });
