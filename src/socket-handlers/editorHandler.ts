@@ -78,6 +78,7 @@ socket.on("joinFileRoom", async ({ projectId, filePath }) => {
       userId: socket.userId,
       username: user?.username || "Unknown",
       socketId: socket.id,
+      filePath
     });
 
     // ✅ Send initial file users list to the new user
@@ -97,7 +98,7 @@ socket.on("joinFileRoom", async ({ projectId, filePath }) => {
       });
     }
 
-    socket.emit("initialFileUsers", users);
+    socket.emit("initialFileUsers", { filePath, users });
 
     // ✅ Send current lock holder to the new user
     if (lockHolder) {
@@ -121,6 +122,7 @@ socket.on("joinFileRoom", async ({ projectId, filePath }) => {
   // ✅ Broadcast that user left the file
   editorNamespace.to(`${projectId}:${filePath}`).emit("userLeftFile", {
     userId,
+    filePath
   });
 
   // ✅ Check if this user holds the lock

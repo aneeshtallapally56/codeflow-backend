@@ -13,6 +13,8 @@ import { connectDB } from './config/db-config';
 import './types/socket';
 import cookieParser from 'cookie-parser';
 import { setupEditorNamespace } from './socket-handlers/editorNamespace';
+import { set } from 'mongoose';
+import { setUpTerminalNamespace } from './socket-handlers/terminalNamespace';
 
 const app = express();
 const server = createServer(app);
@@ -41,6 +43,8 @@ io.on('connection', (socket) => {
 });
 
 setupEditorNamespace(io);
+setUpTerminalNamespace(io);
+
 
 
 app.use('/api', apiRoutes);
