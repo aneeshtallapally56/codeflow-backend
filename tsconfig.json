@@ -8,7 +8,7 @@
     "esModuleInterop": true,
 
 
-
+     "typeRoots": ["./node_modules/@types", "./src/types"]
   },
   "include": ["src/**/*"],
   "exclude": ["generated-projects", "node_modules", "dist"]

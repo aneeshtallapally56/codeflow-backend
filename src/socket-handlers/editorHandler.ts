@@ -13,6 +13,12 @@ type FilePayload = { filePath: string };
 type WriteFilePayload = { filePath: string; data: string };
 type DeletePayload = { filePath: string; projectId: string };
 
+
+declare module 'socket.io' {
+  interface Socket {
+    userId?: string;
+  }
+}
 export const handleEditorSocketEvents = (socket: Socket, editorNamespace: any) => {
    const userId = (socket as any).userId;
   socket.on("joinProjectRoom", async ({ projectId }) => {

@@ -7,6 +7,7 @@ import * as cookie from "cookie";
 import { handleEditorSocketEvents } from "./editorHandler";
 import User from "../models/User";
 import redis from "../utils/redis"; // ✅ make sure path is correct
+import { listContainers } from "../containers/handleContainerCreate";
 
 const watchers = new Map<string, FSWatcher>();
 
@@ -57,6 +58,11 @@ export function setupEditorNamespace(io: Server) {
     // 📦 Editor-related event handlers
     handleEditorSocketEvents(socket, editorNamespace);
 
+    //to get port from the frontend
+    socket.on('getPort',(projectId)=>{
+      console.log(`🔁 Requesting port for project ${projectId}`);
+      listContainers();
+    })
     // 📁 Optional: Set up project file watcher
     const projectPath = path.join(process.cwd(), "generated-projects", projectId);
     const watcher = chokidar.watch(projectPath, {

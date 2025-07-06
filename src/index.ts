@@ -1,54 +1,118 @@
 import express from 'express';
-import jwt, { JwtPayload } from "jsonwebtoken";
-import { Server } from "socket.io";
-import { createServer } from 'node:http';
-import chokidar from 'chokidar';
-import {serverConfig} from './config';
-import apiRoutes from './routes';
+import { Server } from 'socket.io';
+import { createServer } from 'http';
+import { WebSocketServer, WebSocket } from 'ws';
 import cors from 'cors';
-import path from 'node:path';
-import { handleEditorSocketEvents } from './socket-handlers/editorHandler';
-import * as cookie from 'cookie';
-import { connectDB } from './config/db-config';
-import './types/socket';
 import cookieParser from 'cookie-parser';
+import Docker from 'dockerode';
+
+import { serverConfig } from './config';
+import { connectDB } from './config/db-config';
+import apiRoutes from './routes';
 import { setupEditorNamespace } from './socket-handlers/editorNamespace';
-import { set } from 'mongoose';
-import { setUpTerminalNamespace } from './socket-handlers/terminalNamespace';
+import { handleContainerCreate } from './containers/handleContainerCreate';
 
 const app = express();
 const server = createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: "http://localhost:3000", // ✅ Match exactly with frontend
-    credentials: true,               // ✅ Required for cookie auth
-    methods: ["GET", "POST"],
-  }
-});
+const dockerClient = new Docker(); // Uses default /var/run/docker.sock
 
+// --- Middleware ---
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cors({
-     origin: "http://localhost:3000",
-    credentials: true,  
+  origin: 'http://localhost:3000',
+  credentials: true,
 }));
 
-
-
+// --- MongoDB + REST API ---
 connectDB();
-
-io.on('connection', (socket) => {
- console.log("✅ Backend received a socket connection");
-});
-
-setupEditorNamespace(io);
-setUpTerminalNamespace(io);
-
-
-
 app.use('/api', apiRoutes);
 
+// --- Socket.IO Setup ---
+const io = new Server(server, {
+  cors: {
+    origin: 'http://localhost:3000',
+    credentials: true,
+  },
+});
+setupEditorNamespace(io);
+
+io.on('connection', (socket) => {
+  console.log('✅ Backend received a Socket.IO connection');
+});
+
+// --- Terminal WebSocket Setup ---
+const wss = new WebSocketServer({ noServer: true });
+
+server.on('upgrade', async (req, socket, head) => {
+  const isTerminal = req.url?.startsWith('/terminal');
+  if (!isTerminal) return;
+
+  const url = new URL(`http://localhost${req.url}`);
+  const projectId = url.searchParams.get('projectId');
+
+  if (!projectId) {
+    socket.destroy();
+    return;
+  }
+
+  console.log(`🔁 Upgrading to terminal WebSocket for project ${projectId}`);
+
+  await handleContainerCreate(projectId);
+
+  wss.handleUpgrade(req, socket, head, (ws) => {
+    handleTerminalSocket(ws, projectId);
+  
+  });
+});
+
+const handleTerminalSocket = async (ws: WebSocket, projectId: string) => {
+  console.log(`✅ Terminal WebSocket connection for project ${projectId}`);
+
+  try {
+    const container = dockerClient.getContainer(`project-${projectId}`);
+
+    const exec = await container.exec({
+      Cmd: ['/bin/bash'],
+      AttachStdin: true,
+      AttachStdout: true,
+      AttachStderr: true,
+      Tty: true,
+    });
+
+    const stream = await exec.start({ hijack: true, stdin: true });
+
+    // Pipe: container → client
+    stream.on('data', (data: Buffer) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(data.toString());
+      }
+    });
+
+    // Pipe: client → container
+    ws.on('message', (msg) => {
+
+    
+      stream.write(msg);
+
+    });
+
+    ws.on('close', async () => {
+      console.log(`🔌 Terminal WebSocket closed for project ${projectId}`);
+      try {
+        stream.destroy();
+      } catch (err) {
+        console.error(`❌ Error removing container:`, err);
+      }
+    });
+  } catch (err) {
+    console.error(`❌ Error handling terminal WebSocket for ${projectId}:`, err);
+    ws.close();
+  }
+};
+
 server.listen(serverConfig.PORT, () => {
-    console.log(`Server is running on port ${serverConfig.PORT}`);
+  console.log(`🚀 Server running on port ${serverConfig.PORT}`);
+  console.log(`🖥️ Terminal WebSocket ready (handled manually via upgrade)`);
 });

@@ -8,5 +8,4 @@ declare module 'socket.io' {
     userId?: string;
   }
 }
-
 export {}; // Make this file a module

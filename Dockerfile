@@ -1,19 +1,20 @@
 FROM ubuntu:20.04
 
+# Add sandbox user
 RUN useradd -ms /bin/bash sandbox
 
-# Setup working directory
+# Set working dir temporarily as root
 WORKDIR /home/sandbox
-# update the ubuntu machine
+
+# Update + install nano, curl, nodejs
 RUN apt update && apt upgrade -y
-# Install nano and curl
 RUN apt install -y nano curl
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && apt-get install -y nodejs
 
-# Install Node.js
-RUN curl  -fsSL https://deb.nodesource.com/setup_19.x | bash - && apt-get install -y nodejs
+# Set colorful prompt for sandbox user
+RUN echo "export PS1='\\[\\e[1;32m\\]\\u@\\h:\\w\\$ \\[\\e[0m\\] '" >> /home/sandbox/.bashrc
+RUN chown -R sandbox:sandbox /home/sandbox
 
-#configuring terminal to display current working directory
-RUN echo "PS1='\w'">>/home/sandbox/.bashrc
-
-# setup final working directory
+# Set final working dir and switch user
+USER sandbox
 WORKDIR /home/sandbox/app
