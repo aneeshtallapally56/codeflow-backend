@@ -12,7 +12,7 @@ RUN apt install -y nano curl
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && apt-get install -y nodejs
 
 # Set colorful prompt for sandbox user
-RUN echo "export PS1='\\[\\e[1;32m\\]\\u@\\h:\\w\\$ \\[\\e[0m\\] '" >> /home/sandbox/.bashrc
+RUN echo "export PS1='\\u@\\h:\\w\\$ '" >> /home/sandbox/.bashrc
 RUN chown -R sandbox:sandbox /home/sandbox
 
 # Set final working dir and switch user

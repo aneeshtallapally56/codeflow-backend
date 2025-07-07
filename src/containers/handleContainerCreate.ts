@@ -1,6 +1,7 @@
 import Docker from "dockerode";
 import path from "path";
 
+
 const dockerClient = new Docker();
 
 // Track in-progress creations to avoid race conditions
@@ -68,6 +69,7 @@ export const handleContainerCreate = async (projectId: string) => {
     });
 
     await container.start();
+
     console.log(`✅ Container ${containerName} created and started successfully.`);
   } catch (err) {
     console.error(`❌ Error creating container for ${projectId}:`, err);
