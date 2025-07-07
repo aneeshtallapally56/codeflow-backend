@@ -48,7 +48,7 @@ export const handleContainerCreate = async (projectId: string) => {
       AttachStdout: true,
       AttachStderr: true,
       Tty: true,
-      Cmd: ["/bin/bash"],
+     Cmd: ['/bin/bash', '-c', 'echo "\n💡 To preview your app, run:\nnpm run dev -- --host 0.0.0.0\n"; exec bash'],
       User: "sandbox",
       Env: ["HOST=0.0.0.0"],
       ExposedPorts: {
