@@ -7,7 +7,7 @@ import * as cookie from "cookie";
 import { handleEditorSocketEvents } from "./editorHandler";
 import User from "../models/User";
 import redis from "../utils/redis"; // ✅ make sure path is correct
-import { listContainers } from "../containers/handleContainerCreate";
+import { getContainerPort, listContainers } from "../containers/handleContainerCreate";
 
 const watchers = new Map<string, FSWatcher>();
 
@@ -59,9 +59,11 @@ export function setupEditorNamespace(io: Server) {
     handleEditorSocketEvents(socket, editorNamespace);
 
     //to get port from the frontend
-    socket.on('getPort',(projectId)=>{
-      console.log(`🔁 Requesting port for project ${projectId}`);
-      listContainers();
+    socket.on('getPort',async (projectId)=>{
+      const containerPort = await getContainerPort(`project-${projectId}`);
+      socket.emit('getPortSuccess',{
+        port: containerPort
+      })
     })
     // 📁 Optional: Set up project file watcher
     const projectPath = path.join(process.cwd(), "generated-projects", projectId);

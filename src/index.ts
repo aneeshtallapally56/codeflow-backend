@@ -59,11 +59,11 @@ server.on('upgrade', async (req, socket, head) => {
 
   console.log(`🔁 Upgrading to terminal WebSocket for project ${projectId}`);
 
+  // WAIT for container creation to complete before proceeding
   await handleContainerCreate(projectId);
 
   wss.handleUpgrade(req, socket, head, (ws) => {
     handleTerminalSocket(ws, projectId);
-  
   });
 });
 
@@ -72,6 +72,9 @@ const handleTerminalSocket = async (ws: WebSocket, projectId: string) => {
 
   try {
     const container = dockerClient.getContainer(`project-${projectId}`);
+
+    // Wait for container to be ready for exec
+    await new Promise(resolve => setTimeout(resolve, 1500));
 
     const exec = await container.exec({
       Cmd: ['/bin/bash'],
@@ -92,10 +95,7 @@ const handleTerminalSocket = async (ws: WebSocket, projectId: string) => {
 
     // Pipe: client → container
     ws.on('message', (msg) => {
-
-    
       stream.write(msg);
-
     });
 
     ws.on('close', async () => {

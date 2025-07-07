@@ -55,7 +55,7 @@ export const handleContainerCreate = async (projectId: string) => {
       },
       HostConfig: {
         Binds: [
-          `${process.cwd()}/generated-projects/${projectId}:/home/sandbox/app`
+          `${path.resolve(process.cwd(), 'generated-projects', projectId)}:/home/sandbox/app`
         ],
         PortBindings: {
           "5173/tcp": [
@@ -73,5 +73,18 @@ export const handleContainerCreate = async (projectId: string) => {
     console.error(`❌ Error creating container for ${projectId}:`, err);
   } finally {
     creatingContainers.delete(projectId);
-  }
+  } 
 };
+
+export async function getContainerPort(containerName: string) {
+  try {
+    const containers = await dockerClient.listContainers({
+      filters: { name: [containerName] }
+    });
+    
+    return containers[0]?.Ports?.[0]?.PublicPort || null;
+  } catch (err) {
+    console.error(`Error getting port:`, err);
+    return null;
+  }
+}
