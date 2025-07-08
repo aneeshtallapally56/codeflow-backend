@@ -7,7 +7,7 @@ import * as cookie from "cookie";
 import { handleEditorSocketEvents } from "./editorHandler";
 import User from "../models/User";
 import redis from "../utils/redis"; // ✅ make sure path is correct
-import { getContainerPort, listContainers } from "../containers/handleContainerCreate";
+import { getContainerPort, listContainers } from "../controllers/containers/handleContainerCreate";
 
 const watchers = new Map<string, FSWatcher>();
 

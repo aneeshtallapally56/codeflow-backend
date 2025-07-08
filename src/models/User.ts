@@ -30,18 +30,12 @@ const userSchema = new Schema<IUserDocument>({
     minlength: [6, 'Password must be at least 6 characters'],
     select: false // Don't include password in queries by default
   },
-  projectsCreated: {
-    type: Number,
-    default: 0
-  },
-  lastLoginAt: {
-    type: Date,
-    default: null
-  },
-  isActive: {
-    type: Boolean,
-    default: true
-  }
+ avatarUrl:{
+type: String,
+  default: "",
+ },
+ 
+ 
 }, {
   timestamps: true // Adds createdAt and updatedAt automatically
 });

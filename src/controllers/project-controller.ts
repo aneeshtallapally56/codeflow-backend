@@ -76,8 +76,8 @@ const projects = await Project.find({
   ]
 })
 .sort({ createdAt: -1 })
-.populate("user", "username")
-.populate("members", "username");
+.populate("user", "username avatarUrl")
+.populate("members", "username avatarUrl");
 
     res.status(200).json({ projects });
   } catch (err) {

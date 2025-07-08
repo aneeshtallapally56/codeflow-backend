@@ -10,7 +10,7 @@ import { serverConfig } from './config';
 import { connectDB } from './config/db-config';
 import apiRoutes from './routes';
 import { setupEditorNamespace } from './socket-handlers/editorNamespace';
-import { handleContainerCreate } from './containers/handleContainerCreate';
+import { handleContainerCreate } from './controllers/containers/handleContainerCreate';
 
 const app = express();
 const server = createServer(app);

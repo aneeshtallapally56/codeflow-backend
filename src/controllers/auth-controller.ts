@@ -2,6 +2,8 @@ import { Request, Response } from "express";
 import jwt, { SignOptions } from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import User from "../models/User";
+import { randomUUID } from 'crypto';
+import { generateAvatarUrl } from "../utils/avatar";
 
 // Interface for authenticated requests
 interface AuthRequest extends Request {
@@ -37,6 +39,9 @@ export const registerUser = async (
       password: plainPassword,
       confirmPassword,
     } = req.body;
+
+    const avatarSeed = randomUUID();
+     const avatarUrl = generateAvatarUrl(avatarSeed);
 
     // Validation
     if (!username || !email || !plainPassword || !confirmPassword) {
@@ -94,6 +99,7 @@ export const registerUser = async (
       username: username.trim(),
       email: email.toLowerCase().trim(),
       password: hashedPassword,
+      avatarUrl: avatarUrl,
     });
 
     await user.save();
@@ -168,14 +174,6 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Check if user is active
-    if (!user.isActive) {
-      res.status(401).json({
-        success: false,
-        message: "Account has been deactivated",
-      });
-      return;
-    }
 
     // Compare password using bcrypt
     const isPasswordValid = await bcrypt.compare(password, user.password);
@@ -188,9 +186,6 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Update last login
-    user.lastLoginAt = new Date();
-    await user.save();
 
     // Generate JWT token
     const token = generateToken(user._id.toString(), user.email);
