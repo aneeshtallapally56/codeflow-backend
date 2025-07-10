@@ -1,7 +1,7 @@
 import express from 'express';
-import { createProject, deleteProject, getProjectById, getProjectTree , getUserProjects,joinProject } from '../../controllers/project-controller'; 
+import { createProject, deleteProject, getProjectById, getProjectTree , getUserProjects,joinProject, leaveProject } from '../../controllers/project-controller'; 
 import auth from '../../middlewares/auth';
-import { get } from 'node:http';
+
 import { checkProjectAccess } from '../../middlewares/projectAccess';
 
 const router = express.Router();
@@ -12,5 +12,7 @@ router.get('/',auth,getUserProjects);
 router.delete('/:projectId',auth,deleteProject)
 router.get('/:projectId', auth, checkProjectAccess, getProjectById);
 
+
 router.post('/join', auth, joinProject);
+router.post('/leave',auth,leaveProject)
 export default router;

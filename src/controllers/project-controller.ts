@@ -168,3 +168,33 @@ export const joinProject = async (req: Request, res: Response) => {
     res.status(500).json({ message: "Internal server error" });
   }
 };
+
+export const leaveProject = async (req: Request, res: Response) => {
+  try {
+    const user = req.user as { _id: mongoose.Types.ObjectId };
+    const userId = user._id.toString();
+    const { projectId } = req.body;
+
+    const project = await Project.findById(projectId);
+
+    if (!project) {
+      res.status(404).json({ message: "Project not found" });
+      return;
+    }
+
+    if (project.user.toString() === userId) {
+      res.status(400).json({ message: "You cannot leave your own project" });
+      return;
+    }
+
+    project.members = project.members.filter(
+      (id: mongoose.Types.ObjectId) => id.toString() !== userId
+    );
+    await project.save();
+
+    res.status(200).json({ message: "Left project successfully" });
+  } catch (err) {
+    console.error("Error leaving project:", err);
+    res.status(500).json({ message: "Internal server error" });
+  }
+}

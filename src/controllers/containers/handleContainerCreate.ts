@@ -21,7 +21,6 @@ export const handleContainerCreate = async (projectId: string) => {
   const containerName = `project-${projectId}`;
   console.log(`🔁 Creating container for project ${projectId}`);
 
-  // Avoid duplicate creation attempts
   if (creatingContainers.has(projectId)) {
     console.log(`⏳ Container creation already in progress for ${projectId}`);
     return;
@@ -30,7 +29,6 @@ export const handleContainerCreate = async (projectId: string) => {
   creatingContainers.add(projectId);
 
   try {
-    // Check if container already exists
     const allContainers = await dockerClient.listContainers({ all: true });
     const existing = allContainers.find(c =>
       c.Names.includes(`/${containerName}`)
@@ -38,17 +36,26 @@ export const handleContainerCreate = async (projectId: string) => {
 
     if (existing) {
       console.log(`📦 Container "${containerName}" already exists`);
+
+      const container = dockerClient.getContainer(existing.Id);
+      const info = await container.inspect();
+
+      if (!info.State.Running) {
+        console.log(`▶️ Starting existing container "${containerName}"...`);
+        await container.start();
+      }
+
       return;
     }
 
     const container = await dockerClient.createContainer({
       name: containerName,
-      Image: "sandbox", // ✅ Ensure "sandbox" image is pulled
+      Image: "sandbox",
       AttachStdin: true,
       AttachStdout: true,
       AttachStderr: true,
       Tty: true,
-     Cmd: ['/bin/bash', '-c', 'echo "\n💡 To preview your app, run:\nnpm run dev -- --host 0.0.0.0\n"; exec bash'],
+      Cmd: ['/bin/bash', '-c', 'echo "\n💡 To preview your app, run:\nnpm run dev -- --host 0.0.0.0\n"; exec bash'],
       User: "sandbox",
       Env: ["HOST=0.0.0.0"],
       ExposedPorts: {
@@ -59,23 +66,18 @@ export const handleContainerCreate = async (projectId: string) => {
           `${path.resolve(process.cwd(), 'generated-projects', projectId)}:/home/sandbox/app`
         ],
         PortBindings: {
-          "5173/tcp": [
-            {
-              HostPort: "0" // ⚠️ Will pick random available host port
-            }
-          ]
+          "5173/tcp": [{ HostPort: "0" }]
         }
       }
     });
 
     await container.start();
-
     console.log(`✅ Container ${containerName} created and started successfully.`);
   } catch (err) {
     console.error(`❌ Error creating container for ${projectId}:`, err);
   } finally {
     creatingContainers.delete(projectId);
-  } 
+  }
 };
 
 export async function getContainerPort(containerName: string) {
