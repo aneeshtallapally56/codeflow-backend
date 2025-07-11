@@ -14,7 +14,7 @@ import { handleContainerCreate } from './controllers/containers/handleContainerC
 
 const app = express();
 const server = createServer(app);
-const dockerClient = new Docker(); // Uses default /var/run/docker.sock
+const dockerClient = new Docker(); 
 
 // --- Middleware ---
 app.use(cookieParser());

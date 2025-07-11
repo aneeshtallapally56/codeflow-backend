@@ -11,7 +11,7 @@ const ProjectSchema: Schema = new Schema<IProject>(
     // Add enum field here
     type: {
       type: String,
-      enum: ["React", "Nextjs", "Angular", "Vue"],
+      enum: ["React", "NextJs", "Angular", "Vue"],
       required: true,
     },
   },

@@ -22,7 +22,7 @@ export async function createProject(
       return;
     }
 
-    const projectId = await createProjectService();
+    const projectId = await createProjectService(type);
     const newProject = await Project.create({
       _id: projectId,
       title,
