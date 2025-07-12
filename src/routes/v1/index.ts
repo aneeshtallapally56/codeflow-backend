@@ -12,7 +12,7 @@ const router = express.Router();
 router.use('/ping', ping);
 router.use('/projects', projectRoutes);
 router.use('/project', projectRoutes); 
-router.use('/test',test) // Use the imported router
+router.get('/test', test); // Fixed: Use as route handler, not middleware
 router.use('/auth',authRoutes)
 router.use('/files',fileRoutes)
 router.use('/ai',aiRoutes)
