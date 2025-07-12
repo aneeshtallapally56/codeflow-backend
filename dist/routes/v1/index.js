@@ -14,7 +14,7 @@ const router = express_1.default.Router();
 router.use('/ping', controllers_1.ping);
 router.use('/projects', project_routes_1.default);
 router.use('/project', project_routes_1.default);
-router.use('/test', db_controller_1.test); // Use the imported router
+router.get('/test', db_controller_1.test); // Fixed: Use as route handler, not middleware
 router.use('/auth', auth_routes_1.default);
 router.use('/files', file_routes_1.default);
 router.use('/ai', ai_routes_1.default);
