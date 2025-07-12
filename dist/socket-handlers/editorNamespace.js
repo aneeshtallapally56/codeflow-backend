@@ -49,7 +49,7 @@ exports.setupEditorNamespace = setupEditorNamespace;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const cookie = __importStar(require("cookie"));
 const editorHandler_1 = require("./editorHandler");
-const redis_1 = __importDefault(require("../utils/redis"));
+const redis_1 = require("../utils/redis");
 const handleContainerCreate_1 = require("../controllers/containers/handleContainerCreate");
 function setupEditorNamespace(io) {
     const editorNamespace = io.of("/editor");
@@ -84,9 +84,9 @@ function setupEditorNamespace(io) {
         // ✅ Join project room
         socket.join(projectId);
         // ✅ Register in Redis
-        yield redis_1.default.sadd(`project-users:${projectId}`, userId);
+        yield (0, redis_1.redisSadd)(`project-users:${projectId}`, userId);
         // ✅ Fetch current users from Redis
-        const liveUserIds = yield redis_1.default.smembers(`project-users:${projectId}`);
+        const liveUserIds = yield (0, redis_1.redisSmembers)(`project-users:${projectId}`);
         socket.emit("initialUsers", liveUserIds);
         // 📦 Editor-related event handlers
         (0, editorHandler_1.handleEditorSocketEvents)(socket, editorNamespace);
@@ -100,16 +100,16 @@ function setupEditorNamespace(io) {
         // 🔌 Handle disconnect
         socket.on("disconnect", () => __awaiter(this, void 0, void 0, function* () {
             // 🧹 Remove from Redis
-            yield redis_1.default.srem(`project-users:${projectId}`, userId);
+            yield (0, redis_1.redisSrem)(`project-users:${projectId}`, userId);
             // 🔄 Notify others
             editorNamespace.to(projectId).emit("userLeft", {
                 userId,
                 socketId: socket.id,
             });
             // 🔄 Remove from all file rooms this user joined
-            const keys = yield redis_1.default.keys(`project-users:${projectId}:*`);
+            const keys = yield (0, redis_1.redisKeys)(`project-users:${projectId}:*`);
             for (const key of keys) {
-                yield redis_1.default.srem(key, userId);
+                yield (0, redis_1.redisSrem)(key, userId);
                 const filePath = key.replace(`project-users:${projectId}:`, "");
                 editorNamespace.to(`${projectId}:${filePath}`).emit("fileUserLeft", {
                     userId,

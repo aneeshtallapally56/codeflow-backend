@@ -4,7 +4,7 @@ import jwt from "jsonwebtoken";
 import { Socket, Server } from "socket.io";
 import * as cookie from "cookie";
 import { handleEditorSocketEvents } from "./editorHandler";
-import redis from "../utils/redis";
+import { redisSadd, redisSrem, redisSmembers, redisKeys } from "../utils/redis";
 import { getContainerPort } from "../controllers/containers/handleContainerCreate";
 
 declare module 'socket.io' {
@@ -52,10 +52,10 @@ export function setupEditorNamespace(io: Server) {
     socket.join(projectId);
 
     // ✅ Register in Redis
-    await redis.sadd(`project-users:${projectId}`, userId);
+    await redisSadd(`project-users:${projectId}`, userId);
 
     // ✅ Fetch current users from Redis
-    const liveUserIds = await redis.smembers(`project-users:${projectId}`);
+    const liveUserIds = await redisSmembers(`project-users:${projectId}`);
     socket.emit("initialUsers", liveUserIds);
 
     // 📦 Editor-related event handlers
@@ -75,7 +75,7 @@ export function setupEditorNamespace(io: Server) {
 
 
       // 🧹 Remove from Redis
-      await redis.srem(`project-users:${projectId}`, userId);
+      await redisSrem(`project-users:${projectId}`, userId);
 
       // 🔄 Notify others
       editorNamespace.to(projectId).emit("userLeft", {
@@ -84,9 +84,9 @@ export function setupEditorNamespace(io: Server) {
       });
 
       // 🔄 Remove from all file rooms this user joined
-      const keys = await redis.keys(`project-users:${projectId}:*`);
+      const keys = await redisKeys(`project-users:${projectId}:*`);
       for (const key of keys) {
-        await redis.srem(key, userId);
+        await redisSrem(key, userId);
         const filePath = key.replace(`project-users:${projectId}:`, "");
         editorNamespace.to(`${projectId}:${filePath}`).emit("fileUserLeft", {
           userId,

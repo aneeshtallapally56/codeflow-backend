@@ -17,7 +17,7 @@ const promises_1 = __importDefault(require("fs/promises"));
 const path_1 = __importDefault(require("path"));
 const File_1 = __importDefault(require("../models/File"));
 const User_1 = __importDefault(require("../models/User"));
-const redis_1 = __importDefault(require("../utils/redis"));
+const redis_1 = require("../utils/redis");
 const lockManager_1 = require("../utils/lockManager");
 const syncToSupabase_1 = require("../utils/sync/syncToSupabase");
 const getFilePresenceKey = (projectId, filePath) => `file-users:${projectId}:${filePath}`;
@@ -29,14 +29,14 @@ const handleEditorSocketEvents = (socket, editorNamespace) => {
             const user = yield User_1.default.findById(normalizedUserId).select("username avatarUrl");
             if (!user)
                 return;
-            yield redis_1.default.sadd(`project-users:${projectId}`, normalizedUserId);
+            yield (0, redis_1.redisSadd)(`project-users:${projectId}`, normalizedUserId);
             editorNamespace.to(projectId).emit("userJoinedProject", {
                 userId: normalizedUserId,
                 username: user.username,
                 avatarUrl: user.avatarUrl,
                 socketId: socket.id,
             });
-            const userIds = yield redis_1.default.smembers(`project-users:${projectId}`);
+            const userIds = yield (0, redis_1.redisSmembers)(`project-users:${projectId}`);
             const userMap = [];
             for (const id of userIds) {
                 const u = yield User_1.default.findById(id).select("username avatarUrl");
@@ -56,7 +56,7 @@ const handleEditorSocketEvents = (socket, editorNamespace) => {
     }));
     socket.on("leaveProjectRoom", (_a) => __awaiter(void 0, [_a], void 0, function* ({ projectId }) {
         socket.leave(projectId);
-        yield redis_1.default.srem(`project-users:${projectId}`, normalizedUserId);
+        yield (0, redis_1.redisSrem)(`project-users:${projectId}`, normalizedUserId);
         editorNamespace.to(projectId).emit("userLeftProject", {
             userId: normalizedUserId,
             socketId: socket.id,
@@ -66,7 +66,7 @@ const handleEditorSocketEvents = (socket, editorNamespace) => {
         socket.join(`${projectId}:${filePath}`);
         try {
             const lockHolder = yield (0, lockManager_1.getFileLock)(filePath);
-            yield redis_1.default.sadd(getFilePresenceKey(projectId, filePath), normalizedUserId);
+            yield (0, redis_1.redisSadd)(getFilePresenceKey(projectId, filePath), normalizedUserId);
             const user = yield User_1.default.findById(normalizedUserId).select("username avatarUrl");
             editorNamespace.to(`${projectId}:${filePath}`).emit("userJoinedFile", {
                 userId: normalizedUserId,
@@ -75,7 +75,7 @@ const handleEditorSocketEvents = (socket, editorNamespace) => {
                 socketId: socket.id,
                 filePath,
             });
-            const fileUserIds = yield redis_1.default.smembers(getFilePresenceKey(projectId, filePath));
+            const fileUserIds = yield (0, redis_1.redisSmembers)(getFilePresenceKey(projectId, filePath));
             const users = [];
             for (const id of fileUserIds) {
                 const u = yield User_1.default.findById(id).select("username avatarUrl");
@@ -116,7 +116,7 @@ const handleEditorSocketEvents = (socket, editorNamespace) => {
     }));
     socket.on("leaveFileRoom", (_a) => __awaiter(void 0, [_a], void 0, function* ({ projectId, filePath }) {
         socket.leave(`${projectId}:${filePath}`);
-        yield redis_1.default.srem(getFilePresenceKey(projectId, filePath), normalizedUserId);
+        yield (0, redis_1.redisSrem)(getFilePresenceKey(projectId, filePath), normalizedUserId);
         editorNamespace.to(`${projectId}:${filePath}`).emit("userLeftFile", {
             userId: normalizedUserId,
             filePath,
@@ -133,7 +133,7 @@ const handleEditorSocketEvents = (socket, editorNamespace) => {
             }
         }
         if (actualUserId === normalizedUserId) {
-            yield redis_1.default.del(`file-lock:${filePath}`);
+            yield (0, redis_1.redisDel)(`file-lock:${filePath}`);
             editorNamespace.to(`${projectId}:${filePath}`).emit("fileUnlocked", { filePath });
         }
     }));
@@ -211,7 +211,7 @@ const handleEditorSocketEvents = (socket, editorNamespace) => {
     socket.on("lockFile", (_a) => __awaiter(void 0, [_a], void 0, function* ({ projectId, filePath }) {
         const key = `file-lock:${filePath}`;
         const userId = String(socket.userId); // ✅ SAFE user ID
-        const success = yield redis_1.default.set(key, JSON.stringify({ userId }), "EX", 300, "NX");
+        const success = yield (0, redis_1.redisSet)(key, JSON.stringify({ userId }), "EX", 300, "NX");
         if (success) {
             editorNamespace.to(`${projectId}:${filePath}`).emit("fileLocked", {
                 filePath,
@@ -219,7 +219,7 @@ const handleEditorSocketEvents = (socket, editorNamespace) => {
             });
         }
         else {
-            const current = yield redis_1.default.get(key);
+            const current = yield (0, redis_1.redisGet)(key);
             if (current) {
                 const { userId: currentHolder } = JSON.parse(current);
                 socket.emit("fileLocked", { filePath, userId: currentHolder });
@@ -228,7 +228,7 @@ const handleEditorSocketEvents = (socket, editorNamespace) => {
     }));
     socket.on("transferLock", (_a) => __awaiter(void 0, [_a], void 0, function* ({ filePath, projectId, toUserId }) {
         const lockKey = `file-lock:${filePath}`;
-        const rawValue = yield redis_1.default.get(lockKey);
+        const rawValue = yield (0, redis_1.redisGet)(lockKey);
         if (!rawValue) {
             return socket.emit("error", { message: "No lock found to transfer" });
         }
@@ -243,7 +243,7 @@ const handleEditorSocketEvents = (socket, editorNamespace) => {
         if (currentHolder.userId !== normalizedUserId) {
             return socket.emit("error", { message: "You don't hold the lock" });
         }
-        yield redis_1.default.set(lockKey, JSON.stringify({ userId: String(toUserId) }), "EX", 300);
+        yield (0, redis_1.redisSet)(lockKey, JSON.stringify({ userId: String(toUserId) }), "EX", 300);
         editorNamespace.to(`${projectId}:${filePath}`).emit("fileLocked", {
             filePath,
             userId: String(toUserId),
@@ -260,24 +260,24 @@ const handleEditorSocketEvents = (socket, editorNamespace) => {
         });
     }));
     socket.on("disconnect", () => __awaiter(void 0, void 0, void 0, function* () {
-        const keys = yield redis_1.default.keys("file-lock:*");
+        const keys = yield (0, redis_1.redisKeys)("file-lock:*");
         for (const key of keys) {
-            const value = yield redis_1.default.get(key);
+            const value = yield (0, redis_1.redisGet)(key);
             if (!value)
                 continue;
             const { userId } = JSON.parse(value);
             if (userId === normalizedUserId) {
-                yield redis_1.default.del(key);
+                yield (0, redis_1.redisDel)(key);
                 const [_, projectId, ...filePathParts] = key.split(":");
                 const filePath = filePathParts.join(":");
                 editorNamespace.to(`${projectId}:${filePath}`).emit("fileUnlocked", { filePath });
             }
         }
-        const fileKeys = yield redis_1.default.keys("file-users:*");
+        const fileKeys = yield (0, redis_1.redisKeys)("file-users:*");
         for (const key of fileKeys) {
-            const isPresent = yield redis_1.default.sismember(key, normalizedUserId);
+            const isPresent = yield (0, redis_1.redisSismember)(key, normalizedUserId);
             if (isPresent) {
-                yield redis_1.default.srem(key, normalizedUserId);
+                yield (0, redis_1.redisSrem)(key, normalizedUserId);
                 const [_, projectId, ...filePathParts] = key.split(":");
                 const filePath = filePathParts.join(":");
                 editorNamespace.to(`${projectId}:${filePath}`).emit("fileUserLeft", {
