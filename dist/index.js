@@ -42,7 +42,7 @@ app.use(express_1.default.urlencoded({ extended: true, limit: '50mb' }));
 // Production-ready CORS
 const allowedOrigins = ((_a = process.env.ALLOWED_ORIGINS) === null || _a === void 0 ? void 0 : _a.split(',')) || [
     'http://localhost:3000',
-    'https://codeflow.vercel.app'
+    'https://codeflow-six.vercel.app'
 ];
 app.use((0, cors_1.default)({
     origin: function (origin, callback) {
