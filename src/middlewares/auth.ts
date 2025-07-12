@@ -6,10 +6,21 @@ import { Request, Response, NextFunction } from "express";
 
 const auth = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const token = req.cookies.token; 
+    let token: string | undefined;
+
+    // Check for token in Authorization header (Bearer token)
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7); // Remove 'Bearer ' prefix
+    }
+
+    // If no token in header, check cookies
+    if (!token) {
+      token = req.cookies.token;
+    }
 
     if (!token) {
-       res.status(401).json({
+      res.status(401).json({
         success: false,
         message: "No token provided, authorization denied",
       });
@@ -18,7 +29,7 @@ const auth = async (req: Request, res: Response, next: NextFunction) => {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET!);
     if (typeof decoded === "string") {
-       res.status(401).json({
+      res.status(401).json({
         success: false,
         message: "Invalid token format",
       });
@@ -28,7 +39,7 @@ const auth = async (req: Request, res: Response, next: NextFunction) => {
     const user = await User.findById((decoded as JwtPayload).userId).select("-password");
 
     if (!user) {
-       res.status(401).json({
+      res.status(401).json({
         success: false,
         message: "Token is not valid",
       });
@@ -44,7 +55,7 @@ const auth = async (req: Request, res: Response, next: NextFunction) => {
       success: false,
       message: "Token is not valid",
     });
-     return;
+    return;
   }
 };
 

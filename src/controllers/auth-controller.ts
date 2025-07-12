@@ -115,7 +115,6 @@ export const registerUser = async (
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "none",
-
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
     res.status(201).json({
@@ -123,6 +122,7 @@ export const registerUser = async (
       message: "User registered successfully",
       data: {
         user: userResponse,
+        token: token, // Include token in response for Authorization header usage
       },
     });
   } catch (error: any) {
@@ -195,7 +195,6 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "none",
-
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
@@ -207,6 +206,7 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
       message: "Login successful",
       data: {
         user: userResponse,
+        token: token, // Include token in response for Authorization header usage
       },
     });
   } catch (error) {
