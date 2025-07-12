@@ -63,7 +63,7 @@ export const handleContainerCreate = async (projectId: string) => {
       },
       HostConfig: {
         Binds: [
-          `${path.resolve(process.cwd(), 'generated-projects', projectId)}:/home/sandbox/app`
+          `/tmp/${projectId}:/home/sandbox/app`
         ],
         PortBindings: {
           "5173/tcp": [{ HostPort: "0" }]
@@ -73,6 +73,7 @@ export const handleContainerCreate = async (projectId: string) => {
 
     await container.start();
     console.log(`✅ Container ${containerName} created and started successfully.`);
+
   } catch (err) {
     console.error(`❌ Error creating container for ${projectId}:`, err);
   } finally {

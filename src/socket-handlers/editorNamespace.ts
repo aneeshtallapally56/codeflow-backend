@@ -1,16 +1,18 @@
 // src/socket-handlers/editorNamespace.ts
-import chokidar, { FSWatcher } from "chokidar";
 import path from "path";
 import jwt from "jsonwebtoken";
 import { Socket, Server } from "socket.io";
 import * as cookie from "cookie";
 import { handleEditorSocketEvents } from "./editorHandler";
-import User from "../models/User";
-import redis from "../utils/redis"; // ✅ make sure path is correct
-import { getContainerPort, listContainers } from "../controllers/containers/handleContainerCreate";
+import redis from "../utils/redis";
+import { getContainerPort } from "../controllers/containers/handleContainerCreate";
 
-const watchers = new Map<string, FSWatcher>();
-
+declare module 'socket.io' {
+  interface Socket {
+    userId?: string;
+     projectId?: string;
+  }
+}
 export function setupEditorNamespace(io: Server) {
   const editorNamespace = io.of("/editor");
 
@@ -39,6 +41,7 @@ export function setupEditorNamespace(io: Server) {
     const queryParams = socket.handshake.query;
     const projectId = queryParams.projectId as string;
     const userId = (socket as any).userId;
+    (socket as any).projectId = projectId;
 
     if (!projectId || !userId) {
       socket.disconnect();
@@ -58,39 +61,17 @@ export function setupEditorNamespace(io: Server) {
     // 📦 Editor-related event handlers
     handleEditorSocketEvents(socket, editorNamespace);
 
-    //to get port from the frontend
-    socket.on('getPort',async (projectId)=>{
+    // 🛠 Terminal port support
+    socket.on("getPort", async (projectId) => {
       const containerPort = await getContainerPort(`project-${projectId}`);
-      socket.emit('getPortSuccess',{
-        port: containerPort
-      })
-    })
-    // 📁 Optional: Set up project file watcher
-    const projectPath = path.join(process.cwd(), "generated-projects", projectId);
-    const watcher = chokidar.watch(projectPath, {
-      ignored: (filePath) => filePath.includes("node_modules"),
-      persistent: true,
-      ignoreInitial: true,
-      awaitWriteFinish: {
-        stabilityThreshold: 2000,
-        pollInterval: 100,
-      },
+      socket.emit("getPortSuccess", {
+        port: containerPort,
+      });
     });
-
-    watcher.on("all", (event, filePath) => {
-      console.log(`📁 File ${filePath} ${event}`);
-    });
-
-    watchers.set(socket.id, watcher);
 
     // 🔌 Handle disconnect
     socket.on("disconnect", async () => {
       console.log(`🔌 Disconnected: ${socket.id}`);
-
-      // 🧹 Cleanup watcher
-      const watcher = watchers.get(socket.id);
-      if (watcher) await watcher.close();
-      watchers.delete(socket.id);
 
       // 🧹 Remove from Redis
       await redis.srem(`project-users:${projectId}`, userId);

@@ -5,6 +5,7 @@ import File from "../models/File";
 import User from "../models/User";
 import redis from "../utils/redis";
 import { getFileLock } from "../utils/lockManager";
+import { syncProjectToSupabase } from "../utils/sync/syncToSupabase";
 
 const getFilePresenceKey = (projectId: string, filePath: string) =>
   `file-users:${projectId}:${filePath}`;
@@ -164,6 +165,7 @@ if (actualUserId === normalizedUserId) {
   socket.on("writeFile", async ({ data, filePath, projectId }: WriteFilePayload & { projectId: string }) => {
     try {
       await fs.writeFile(filePath, data);
+      console.log("write file success", filePath , data);
       editorNamespace.to(`${projectId}:${filePath}`).emit("writeFileSuccess", {
         data: "File written successfully",
         filePath,
@@ -318,5 +320,8 @@ const success = await redis.set(key, JSON.stringify({ userId }), "EX", 300, "NX"
         });
       }
     }
+   if (socket.projectId) {
+  await syncProjectToSupabase(socket.projectId, normalizedUserId);
+}
   });
 };

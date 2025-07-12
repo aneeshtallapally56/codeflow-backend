@@ -8,5 +8,6 @@ export interface IProject {
   members?: Types.ObjectId[];
   createdAt?: Date;
   updatedAt?: Date;
+  downloadUrl?: string; 
   type: "React" | "Nextjs" | "Angular" | "Vue"; 
 }

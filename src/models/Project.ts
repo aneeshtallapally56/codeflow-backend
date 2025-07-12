@@ -14,6 +14,7 @@ const ProjectSchema: Schema = new Schema<IProject>(
       enum: ["React", "NextJs", "Angular", "Vue"],
       required: true,
     },
+    downloadUrl: { type: String }, // URL to the zip file
   },
   {
     timestamps: true,
