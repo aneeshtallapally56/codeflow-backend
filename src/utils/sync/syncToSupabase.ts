@@ -8,7 +8,7 @@ import { getProjectPath } from "../projectPath/projectPath";
 
 export async function syncProjectToSupabase(projectId: string, userId: string) {
   const zipPath = `/tmp/${projectId}.zip`;
-   const projectPath = getProjectPath(projectId);
+   const projectPath = path.join(getProjectPath(projectId), "sandbox");
 
   try {
     await zipDirectory(projectPath, zipPath);
