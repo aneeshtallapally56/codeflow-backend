@@ -31,7 +31,7 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 // Production-ready CORS
 const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [
   'http://localhost:3000',
-  'https://codeflow-six.vercel.app'
+  'https://codeflow-eaupalrip-tallapallyaneeshs-projects.vercel.app'
 ];
 
 app.use(cors({
