@@ -2,12 +2,21 @@ import Docker from "dockerode";
 import path from "path";
 import { getProjectPath } from "../../utils/projectPath/projectPath"
 
-const dockerClient = new Docker();
-
-// Track in-progress creations to avoid race conditions
 const creatingContainers = new Set<string>();
 
+// Initialize Docker client with error handling
+let dockerClient: Docker | null = null;
+try {
+  dockerClient = new Docker();
+} catch (error) {
+  console.warn('⚠️ Docker not available, container features will be disabled');
+}
+
 export const listContainers = async ()=>{
+  if (!dockerClient) {
+    console.warn('⚠️ Docker not available, skipping container listing');
+    return;
+  }
   const allContainers = await dockerClient.listContainers({ all: true });
   console.log(`Listing all containers...${allContainers.length} found`);
   //print ports arrau
@@ -17,6 +26,11 @@ export const listContainers = async ()=>{
 }
 
 export const handleContainerCreate = async (projectId: string) => {
+  if (!dockerClient) {
+    console.warn(`⚠️ Docker not available, skipping container creation for ${projectId}`);
+    return;
+  }
+
   const containerName = `project-${projectId}`;
   console.log(`🔁 Creating container for project ${projectId}`);
 
@@ -84,15 +98,23 @@ export const handleContainerCreate = async (projectId: string) => {
   }
 };
 
-export async function getContainerPort(containerName: string) {
-  try {
-    const containers = await dockerClient.listContainers({
-      filters: { name: [containerName] }
-    });
-    
-    return containers[0]?.Ports?.[0]?.PublicPort || null;
-  } catch (err) {
-    console.error(`Error getting port:`, err);
+export const getContainerPort = async (projectId: string): Promise<number | null> => {
+  if (!dockerClient) {
     return null;
   }
-}
+
+  try {
+    const container = dockerClient.getContainer(`project-${projectId}`);
+    const info = await container.inspect();
+    const portBindings = info.NetworkSettings.Ports["5173/tcp"];
+    
+    if (portBindings && portBindings.length > 0) {
+      return parseInt(portBindings[0].HostPort);
+    }
+    
+    return null;
+  } catch (err) {
+    console.error(`❌ Error getting container port for ${projectId}:`, err);
+    return null;
+  }
+};
