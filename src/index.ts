@@ -60,7 +60,7 @@ server.on('upgrade', async (req, socket, head) => {
     return;
   }
 
-  console.log(`🔁 Upgrading to terminal WebSocket for project ${projectId}`);
+  
 
   // WAIT for container creation to complete before proceeding
   await handleContainerCreate(projectId);
@@ -71,7 +71,7 @@ server.on('upgrade', async (req, socket, head) => {
 });
 
 const handleTerminalSocket = async (ws: WebSocket, projectId: string) => {
-  console.log(`✅ Terminal WebSocket connection for project ${projectId}`);
+  
 
   try {
     const container = dockerClient.getContainer(`project-${projectId}`);
@@ -102,7 +102,7 @@ const handleTerminalSocket = async (ws: WebSocket, projectId: string) => {
     });
 
     ws.on('close', async () => {
-      console.log(`🔌 Terminal WebSocket closed for project ${projectId}`);
+   
       try {
         stream.destroy();
       } catch (err) {
@@ -116,6 +116,5 @@ const handleTerminalSocket = async (ws: WebSocket, projectId: string) => {
 };
 
 server.listen(serverConfig.PORT, () => {
-  console.log(`🚀 Server running on port ${serverConfig.PORT}`);
-  console.log(`🖥️ Terminal WebSocket ready (handled manually via upgrade)`);
+
 });

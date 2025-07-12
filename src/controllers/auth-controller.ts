@@ -189,7 +189,7 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
 
     // Generate JWT token
     const token = generateToken(user._id.toString(), user.email);
-    console.log('NODE_ENV:', process.env.NODE_ENV);
+
     res.cookie("token", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",

@@ -14,7 +14,7 @@ export async function syncProjectToSupabase(projectId: string, userId: string) {
     await zipDirectory(projectPath, zipPath);
     await uploadToSupabase(zipPath, userId, projectId);
     await fs.unlink(zipPath); // clean up
-    console.log(`✅ Synced project ${projectId} to Supabase`);
+
   } catch (err) {
     console.error("❌ Failed to sync project to Supabase:", err);
   }

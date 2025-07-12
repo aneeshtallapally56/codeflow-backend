@@ -35,15 +35,15 @@ export const createProjectService = async (type: string) => {
       throw new Error(`Unsupported framework type: ${framework}`);
   }
 
-  console.log("🚀 Running command:", command);
-  console.log("📁 Target folder:", projectPath);
+
+
 
   try {
     await execPromise(command, { cwd: projectPath });
     
     // Verify project was created successfully
     const projectContents = await fs.readdir(projectPath);
-    console.log("📁 Project created with files:", projectContents);
+
     
     if (projectContents.length === 0) {
       throw new Error("Project creation resulted in empty directory");
@@ -94,10 +94,10 @@ export const deleteProjectService = async (projectId: string) => {
   const projectPath = getProjectPath(projectId);
 
   try {
-    console.log("🛣️ Attempting to delete local path:", projectPath);
+
     await fs.access(projectPath);
     await fs.rm(projectPath, { recursive: true, force: true });
-    console.log("✅ Project directory deleted:", projectPath);
+
   } catch (err) {
     console.warn("⚠️ Project folder not found or already deleted:", projectPath);
   }

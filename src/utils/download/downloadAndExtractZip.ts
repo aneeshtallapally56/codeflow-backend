@@ -12,7 +12,7 @@ export async function downloadAndExtractZip(projectId: string, downloadUrl: stri
       const files = fs.readdirSync(tmpDir);
       if (files.length === 0) {
         fs.rmSync(tmpDir, { recursive: true, force: true });
-        console.log("🗑️ Removed empty project directory");
+
       } else {
         console.log("⚠️ Project directory exists with content, skipping extraction.");
         return;
@@ -20,14 +20,14 @@ export async function downloadAndExtractZip(projectId: string, downloadUrl: stri
     } catch (err) {
       // If we can't read the directory, it's probably corrupted, so remove it
       fs.rmSync(tmpDir, { recursive: true, force: true });
-      console.log("🗑️ Removed corrupted project directory");
+
     }
   }
 
-  console.log("📦 Downloading zip from:", downloadUrl);
+
 
   const response = await fetch(downloadUrl);
-  console.log("📥 Status:", response.status, response.statusText);
+
 
   if (!response.ok) {
     const text = await response.text();
@@ -36,7 +36,7 @@ export async function downloadAndExtractZip(projectId: string, downloadUrl: stri
   }
 
   const buffer = Buffer.from(await response.arrayBuffer());
-  console.log("📦 Zip size (bytes):", buffer.length);
+
 
   // Ensure tmp directory exists
   if (!fs.existsSync('/tmp')) {
@@ -44,7 +44,7 @@ export async function downloadAndExtractZip(projectId: string, downloadUrl: stri
   }
 
   fs.writeFileSync(zipPath, buffer);
-  console.log("📁 Zip written to:", zipPath);
+ 
 
   try {
     // Create the extraction directory
@@ -54,11 +54,11 @@ export async function downloadAndExtractZip(projectId: string, downloadUrl: stri
       .pipe(unzipper.Extract({ path: tmpDir }))
       .promise();
     
-    console.log(`✅ Project ${projectId} extracted to ${tmpDir}`);
+
     
     // Verify extraction was successful
     const extractedFiles = fs.readdirSync(tmpDir);
-    console.log(`📁 Extracted files count: ${extractedFiles.length}`);
+
     
     if (extractedFiles.length === 0) {
       throw new Error("Extraction resulted in empty directory");
@@ -75,7 +75,7 @@ export async function downloadAndExtractZip(projectId: string, downloadUrl: stri
     // Clean up zip file
     if (fs.existsSync(zipPath)) {
       fs.unlinkSync(zipPath);
-      console.log("🗑️ Cleaned up zip file");
+
     }
   }
 }

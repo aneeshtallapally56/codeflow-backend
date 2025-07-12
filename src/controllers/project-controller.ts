@@ -105,10 +105,10 @@ export async function getProjectTree(
 
     // Extract from Supabase if project doesn't exist or is empty
     if (!projectExists || !hasContent) {
-      console.log(`📦 Extracting project ${projectId} from Supabase...`);
+
       await downloadAndExtractZip(projectId, project.downloadUrl);
     } else {
-      console.log(`✅ Project ${projectId} already exists in temp directory`);
+
     }
 
     const tree = await getTree(projectId);
@@ -169,7 +169,7 @@ export const deleteProject = async (req: Request, res: Response) => {
     }
 
     //Delete from Supabase
-    console.log(`🗑️ Deleting project ${projectId} from Supabase...`);
+
       const { error: supabaseError } = await supabase
       .storage
       .from(process.env.SUPABASE_BUCKET_NAME!)

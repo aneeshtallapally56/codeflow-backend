@@ -165,7 +165,7 @@ if (actualUserId === normalizedUserId) {
   socket.on("writeFile", async ({ data, filePath, projectId }: WriteFilePayload & { projectId: string }) => {
     try {
       await fs.writeFile(filePath, data);
-      console.log("write file success", filePath , data);
+
       editorNamespace.to(`${projectId}:${filePath}`).emit("writeFileSuccess", {
         data: "File written successfully",
         filePath,

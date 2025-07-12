@@ -64,7 +64,7 @@ export function setupEditorNamespace(io: Server) {
     // 🛠 Terminal port support
     socket.on("getPort", async (projectId) => {
       const containerPort = await getContainerPort(`project-${projectId}`);
-      console.log(`Container port for project ${projectId}: ${containerPort}`);
+
       socket.emit("getPortSuccess", {
         port: containerPort,
       });
@@ -72,7 +72,7 @@ export function setupEditorNamespace(io: Server) {
 
     // 🔌 Handle disconnect
     socket.on("disconnect", async () => {
-      console.log(`🔌 Disconnected: ${socket.id}`);
+
 
       // 🧹 Remove from Redis
       await redis.srem(`project-users:${projectId}`, userId);
