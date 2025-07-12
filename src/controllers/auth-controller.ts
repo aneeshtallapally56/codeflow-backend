@@ -115,6 +115,7 @@ export const registerUser = async (
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "none",
+      domain:"codeflow-six.vercel.app",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
     res.status(201).json({
@@ -194,6 +195,7 @@ export const loginUser = async (req: Request, res: Response): Promise<void> => {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "none",
+      domain: "codeflow-six.vercel.app",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
@@ -254,7 +256,8 @@ export const logoutUser = async (
     res.clearCookie("token", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      sameSite: "none",
+      domain: "codeflow-six.vercel.app",
     });
 
     res.status(200).json({
