@@ -4,10 +4,11 @@ import fs from "fs/promises";
 import path from "path";
 import { zipDirectory } from "../upload/zipDirectory";
 import { uploadToSupabase } from "../upload/uploadToSupabase";
+import { getProjectPath } from "../projectPath/projectPath";
 
 export async function syncProjectToSupabase(projectId: string, userId: string) {
   const zipPath = `/tmp/${projectId}.zip`;
-  const projectPath = `/tmp/${projectId}`;
+   const projectPath = getProjectPath(projectId);
 
   try {
     await zipDirectory(projectPath, zipPath);

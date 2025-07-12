@@ -12,6 +12,7 @@ import { zipDirectory } from "../utils/upload/zipDirectory";
 import { uploadToSupabase } from "../utils/upload/uploadToSupabase";
 import { downloadAndExtractZip } from "../utils/download/downloadAndExtractZip";
 import { supabase } from "../config/supabase";
+import { getProjectPath } from "../utils/projectPath/projectPath"; // Add this import
 
 export async function createProject(
   req: Request,
@@ -28,10 +29,10 @@ export async function createProject(
       return;
     }
 
-    // Create project in /tmp
+    // Create project in system temp directory
     const projectId = await createProjectService(type);
-    const projectPath = `/tmp/${projectId}`;
-    const zipPath = `/tmp/${projectId}.zip`;
+    const projectPath = getProjectPath(projectId); // Use getProjectPath instead of hardcoded path
+    const zipPath = path.join(path.dirname(projectPath), `${projectId}.zip`); // Create zip in same temp directory
 
     // Verify project was created
     if (!fs.existsSync(projectPath)) {
@@ -86,7 +87,7 @@ export async function getProjectTree(
       return;
     }
 
-    const projectPath = `/tmp/${projectId}`;
+    const projectPath = getProjectPath(projectId); // Use getProjectPath instead of hardcoded path
     
     // Check if project exists in tmp and has content
     const projectExists = fs.existsSync(projectPath);
@@ -107,7 +108,7 @@ export async function getProjectTree(
       console.log(`📦 Extracting project ${projectId} from Supabase...`);
       await downloadAndExtractZip(projectId, project.downloadUrl);
     } else {
-      console.log(`✅ Project ${projectId} already exists in /tmp`);
+      console.log(`✅ Project ${projectId} already exists in temp directory`);
     }
 
     const tree = await getTree(projectId);
@@ -168,10 +169,11 @@ export const deleteProject = async (req: Request, res: Response) => {
     }
 
     //Delete from Supabase
+    console.log(`🗑️ Deleting project ${projectId} from Supabase...`);
       const { error: supabaseError } = await supabase
       .storage
       .from(process.env.SUPABASE_BUCKET_NAME!)
-      .remove([`${projectId}.zip`]);
+      .remove([`${userId}/${projectId}.zip`]);
 
     if (supabaseError) {
       console.error("❌ Supabase deletion failed:", supabaseError.message);

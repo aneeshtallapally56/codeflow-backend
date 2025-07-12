@@ -11,7 +11,7 @@ import { connectDB } from './config/db-config';
 import apiRoutes from './routes';
 import { setupEditorNamespace } from './socket-handlers/editorNamespace';
 import { handleContainerCreate } from './controllers/containers/handleContainerCreate';
-import { startTmpCleanupJob } from './utils/cron/cleanTempProjects';
+
 
 const app = express();
 const server = createServer(app);
@@ -30,7 +30,7 @@ app.use(cors({
 connectDB();
 app.use('/api', apiRoutes);
 
-startTmpCleanupJob();
+
 
 // --- Socket.IO Setup ---
 const io = new Server(server, {

@@ -1,6 +1,6 @@
 import Docker from "dockerode";
 import path from "path";
-
+import { getProjectPath } from "../../utils/projectPath/projectPath"
 
 const dockerClient = new Docker();
 
@@ -15,7 +15,6 @@ export const listContainers = async ()=>{
     console.log(container.Ports);
   })
 }
-
 
 export const handleContainerCreate = async (projectId: string) => {
   const containerName = `project-${projectId}`;
@@ -48,6 +47,10 @@ export const handleContainerCreate = async (projectId: string) => {
       return;
     }
 
+    
+    const projectPath = getProjectPath(projectId);
+    console.log(`📁 Mounting project path: ${projectPath}`);
+
     const container = await dockerClient.createContainer({
       name: containerName,
       Image: "sandbox",
@@ -63,7 +66,7 @@ export const handleContainerCreate = async (projectId: string) => {
       },
       HostConfig: {
         Binds: [
-          `/tmp/${projectId}:/home/sandbox/app`
+          `${projectPath}:/home/sandbox/app` // Use getProjectPath instead of hardcoded path
         ],
         PortBindings: {
           "5173/tcp": [{ HostPort: "0" }]

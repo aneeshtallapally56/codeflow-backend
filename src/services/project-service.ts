@@ -1,18 +1,19 @@
 import uuid4 from "uuid4";
 import path from "path";
 import fs from "fs/promises";
+import os from "os";
 import directoryTree from "directory-tree";
 import { execPromise } from "../utils/exec-utility";
+import { getProjectPath } from "../utils/projectPath/projectPath";
 
 type Framework = "React" | "NextJs" | "Angular" | "Vue";
 
 export const createProjectService = async (type: string) => {
   const framework = type;
   const projectId = uuid4();
-  const projectPath = path.resolve(process.cwd(), "/tmp", projectId);
+  const projectPath = getProjectPath(projectId);
   
   // Ensure tmp directory exists
-  await fs.mkdir(path.resolve(process.cwd(), "/tmp"), { recursive: true });
   await fs.mkdir(projectPath, { recursive: true });
 
   let command = "";
@@ -68,7 +69,7 @@ export const createProjectService = async (type: string) => {
 };
 
 export const getProjectTree = async (projectId: string) => {
-  const projectPath = path.resolve(process.cwd(), "/tmp", projectId);
+  const projectPath = getProjectPath(projectId);
   
   try {
     // Check if project directory exists
@@ -90,9 +91,10 @@ export const getProjectTree = async (projectId: string) => {
 };
 
 export const deleteProjectService = async (projectId: string) => {
-  const projectPath = path.join(process.cwd(), "tmp", projectId);
+  const projectPath = getProjectPath(projectId);
 
   try {
+    console.log("🛣️ Attempting to delete local path:", projectPath);
     await fs.access(projectPath);
     await fs.rm(projectPath, { recursive: true, force: true });
     console.log("✅ Project directory deleted:", projectPath);
