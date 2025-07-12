@@ -39,7 +39,6 @@
   },
   "devDependencies": {
     "@types/archiver": "^6.0.3",
-    "@types/bcryptjs": "^3.0.0",
     "@types/cookie-parser": "^1.4.9",
     "@types/cors": "^2.8.19",
     "@types/dockerode": "^3.3.42",
