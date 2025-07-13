@@ -39,7 +39,9 @@ export const createProjectService = async (type: string) => {
 
 
   try {
+    console.log("📦 Running scaffold command:", command);
     await execPromise(command, { cwd: projectPath });
+    console.log("📁 In directory:", projectPath);
     
     // Verify project was created successfully
     const projectContents = await fs.readdir(projectPath);

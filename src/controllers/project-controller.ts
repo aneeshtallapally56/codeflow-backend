@@ -31,7 +31,10 @@ export async function createProject(
 
     // Create project in system temp directory
     const projectId = await createProjectService(type);
-    const projectPath = getProjectPath(projectId); // Use getProjectPath instead of hardcoded path
+    const projectPath = getProjectPath(projectId); 
+    const contents = fs.existsSync(projectPath) ? fs.readdirSync(projectPath) : [];
+console.log("📂 Project created at:", projectPath);
+console.log("📄 Files inside project:", contents);
     const zipPath = path.join(path.dirname(projectPath), `${projectId}.zip`); // Create zip in same temp directory
 
     // Verify project was created

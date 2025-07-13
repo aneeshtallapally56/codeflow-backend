@@ -72,6 +72,7 @@ export const handleEditorSocketEvents = (socket: Socket, editorNamespace: any) =
   });
 
 socket.on("joinFileRoom", async ({ projectId, filePath }) => {
+    console.log("🔗 User joining file room:", { userId: normalizedUserId, projectId, filePath });
     socket.join(`${projectId}:${filePath}`);
     try {
       const lockHolder = await getFileLock(filePath);
@@ -173,6 +174,7 @@ if (actualUserId === normalizedUserId) {
       await fs.writeFile(filePath, data);
       console.log("✅ File written successfully:", filePath);
 
+      console.log("📤 Broadcasting writeFileSuccess to room:", `${projectId}:${filePath}`);
       editorNamespace.to(`${projectId}:${filePath}`).emit("writeFileSuccess", {
         data: "File written successfully",
         filePath,
