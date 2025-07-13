@@ -163,15 +163,23 @@ if (actualUserId === normalizedUserId) {
   });
 
   socket.on("writeFile", async ({ data, filePath, projectId }: WriteFilePayload & { projectId: string }) => {
+    console.log("📝 writeFile event received:", { filePath, projectId, dataLength: data?.length });
+    
     try {
+      // Ensure the directory exists
+      const dir = path.dirname(filePath);
+      await fs.mkdir(dir, { recursive: true });
+      
       await fs.writeFile(filePath, data);
+      console.log("✅ File written successfully:", filePath);
 
       editorNamespace.to(`${projectId}:${filePath}`).emit("writeFileSuccess", {
         data: "File written successfully",
         filePath,
       });
-    } catch {
-      socket.emit("error", { data: "Error writing the file" });
+    } catch (error) {
+      console.error("❌ Error writing file:", error);
+      socket.emit("error", { data: "Error writing the file", error: String(error) });
     }
   });
 

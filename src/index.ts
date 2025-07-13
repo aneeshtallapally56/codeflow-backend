@@ -85,7 +85,7 @@ const io = new Server(server, {
 setupEditorNamespace(io);
 
 io.on('connection', (socket) => {
-  console.log('✅ Backend received a Socket.IO connection');
+  console.log('✅ Backend received a Socket.IO connection:', socket.id);
 });
 
 // --- Terminal WebSocket Setup ---

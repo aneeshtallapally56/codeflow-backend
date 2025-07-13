@@ -59,6 +59,7 @@ export function setupEditorNamespace(io: Server) {
     socket.emit("initialUsers", liveUserIds);
 
     // 📦 Editor-related event handlers
+    console.log("🔧 Setting up editor socket events for user:", userId, "project:", projectId);
     handleEditorSocketEvents(socket, editorNamespace);
 
     // 🛠 Terminal port support
